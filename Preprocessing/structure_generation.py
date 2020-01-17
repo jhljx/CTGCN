@@ -27,11 +27,12 @@ class StructuralNetworkGenerator:
         self.full_node_list = nodes_set
         self.node_file = node_file
 
+        dir_helper.check_and_make_path(self.output_base_path)
         tem_dir = ['node_subgraph', 'structural_network_adjacent']
         for tem in tem_dir:
             dir_helper.check_and_make_path(os.path.join(self.output_base_path, tem))
 
-    def get_structural_network_all_time(self, worker=-1, max_cnt=100, min_sim=0.5):
+    def get_structural_network_all_time(self, worker=-1, max_cnt=10, min_sim=0.5):
         print("getting all timestamps structural network adjacent...")
 
         f_list = os.listdir(self.input_base_path)
@@ -58,7 +59,7 @@ class StructuralNetworkGenerator:
             pool.join()
         print("got it...")
 
-    def get_structural_network(self, input_file, output_file, file_num, i, max_cnt=100, min_sim=0.5):
+    def get_structural_network(self, input_file, output_file, file_num, i, max_cnt=10, min_sim=0.5):
         print('\t', str(file_num - i), ' file(s) left')
         if os.path.exists(output_file):
             print('\t', output_file, "exist")
@@ -71,14 +72,13 @@ class StructuralNetworkGenerator:
         node_list = list(df_subgraph.index)
         df_subgraph['node'] = node_list
 
-        neighbor_node_list = df_subgraph.loc[df_subgraph['neighbor'] == 1, 'node'].tolist()
-        single_node_list = df_subgraph.loc[df_subgraph['neighbor'] == 0, 'node'].tolist()
+        cond = (df_subgraph['neighbor'] == 1).values
+        neighbor_node_list = df_subgraph.loc[cond, 'node'].tolist()
+        single_node_list = df_subgraph.loc[~cond, 'node'].tolist()
+        node_data_dict = dict(zip(node_list, df_subgraph['data'].tolist()))
 
-        wl_kernel = GraphKernel(kernel=[{"name": "weisfeiler_lehman", "n_iter": 5}, "subtree_wl"], normalize=True)
-        df_structural_edges = pd.DataFrame(columns=['from_id', 'to_id', 'weight'])
-
-        def calc_structural_similarity(series, max_cnt=None, min_sim=None):
-            global df_structural_edges
+        structural_network = nx.Graph()
+        def get_structural_neigbors(series, max_cnt=None):
             node_id = series['node']
             neighbor_type = series['neighbor']
             cnt = random.randint(1, max_cnt)
@@ -86,25 +86,33 @@ class StructuralNetworkGenerator:
                 sampled_nodes = random.sample(neighbor_node_list, cnt)
             else:
                 sampled_nodes = random.sample(single_node_list, cnt)
-            sampled_subgraph_list = df_subgraph.loc[sampled_nodes, 'data'].tolist()
+            # sampled_subgraph_list = df_subgraph.loc[sampled_nodes, 'data'].tolist()
             df_sim = pd.DataFrame(sampled_nodes, columns=['to_id'])
-            wl_kernel.fit(df_subgraph.loc[node_id, 'data'])
-            df_sim['weight'] = wl_kernel.transform(sampled_subgraph_list)
-            cond = (df_sim['weight'] >= min_sim)
-            if cond.sum() == 0:
-                return
-            df_sim = df_sim.loc[cond, :]
             df_sim['from_id'] = node_id
-            df_sim['weight'] = 1
-
-            df_structural_edges = pd.concat([df_structural_edges, df_sim], df_sim)
+            structural_network.add_edges_from(df_sim.values.tolist())
             return
 
-        df_subgraph.apply(calc_structural_similarity, max_cnt=max_cnt, min_sim=min_sim)
+        df_subgraph.apply(get_structural_neigbors, axis=1, max_cnt=max_cnt)
+        # print('finish generate structural neighbors!')
+        df_structural_edges = pd.DataFrame(list(structural_network.edges()), columns=['from_id', 'to_id'])
+        del structural_network
+
+        wl_kernel = GraphKernel(kernel=[{"name": "weisfeiler_lehman", "n_iter": 5}, "subtree_wl"],
+                                verbose=True, normalize=True)
+
+        def calc_structural_similarity(series):
+            # this need to use fit_transform function, not fit. Because of bugs in this library!
+            wl_kernel.fit_transform([node_data_dict[series['from_id']]])
+            return wl_kernel.transform([node_data_dict[series['to_id']]]).flatten()[0]
+        df_structural_edges['weight'] = df_structural_edges.apply(calc_structural_similarity, axis=1)
+        print('real edges:', (df_structural_edges['weight'] >= min_sim).sum())
+        print('edge num: ', df_structural_edges.shape[0])
+        df_structural_edges = df_structural_edges.loc[df_structural_edges['weight'] >= min_sim]
+        df_structural_edges['weight'] = 1
         df_structural_edges.to_csv(output_file, sep='\t', index=True, header=True)
         print('\t', str(file_num - i), ' finished')
 
-    def prepare_subgraph_data_folder(self, layer=1, with_weight=True, worker=-1):
+    def prepare_subgraph_data_folder(self, layer=1, ratio=1, with_weight=True, worker=-1):
         print("prepare subgraph data...")
 
         f_list = os.listdir(self.input_base_path)
@@ -113,9 +121,8 @@ class StructuralNetworkGenerator:
         if worker <= 0:
             for i, f_name in enumerate(f_list):
                 self.prepare_subgraph_data_file(input_file=os.path.join(self.input_base_path, f_name),
-                                                        output_file=os.path.join(self.output_base_path,
-                                                                                 "node_subgraph", f_name),
-                                                        layer=layer, with_weight=with_weight, file_num=length, i=i)
+                                                output_file=os.path.join(self.output_base_path, "node_subgraph", f_name),
+                                                file_num=length, i=i, layer=layer, ratio=ratio, with_weight=with_weight)
         else:
             worker = min(worker, length, os.cpu_count())
             pool = multiprocessing.Pool(processes=worker)
@@ -125,7 +132,7 @@ class StructuralNetworkGenerator:
                 pool.apply_async(self.prepare_subgraph_data_file, (
                     os.path.join(self.input_base_path, f_name),
                     os.path.join(self.output_base_path, "node_subgraph", f_name), length, i,
-                    layer, with_weight))
+                    layer, ratio, with_weight))
 
             pool.close()
             pool.join()
@@ -194,8 +201,7 @@ class StructuralNetworkGenerator:
 
 if __name__ == "__main__":
 
-    s = StructuralNetworkGenerator(base_path="..\\data\\enron", input_folder="1.format",
+    s = StructuralNetworkGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
                                    output_folder="dynSPE", node_file="nodes_set\\nodes.csv")
-    # s.prepare_subgraph_data_file_optimize_test()
-    s.prepare_subgraph_data_folder(worker=10)
-    s.get_structural_network_all_time(worker=10)
+    # s.prepare_subgraph_data_folder(worker=10, layer=1, ratio=1)
+    s.get_structural_network_all_time(worker=10, max_cnt=50, min_sim=0.5)
