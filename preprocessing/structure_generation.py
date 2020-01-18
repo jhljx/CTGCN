@@ -1,5 +1,4 @@
 #coding: utf-8
-
 import numpy as np
 import pandas as pd
 import os, multiprocessing, random
@@ -14,25 +13,32 @@ class StructuralNetworkGenerator:
     base_path: str
     input_base_path: str
     output_base_path: str
-    node_file: str
     full_node_list: list
 
-    def __init__(self, base_path, node_file, input_folder='1.format', output_folder='RWT-GCN'):
+    hop: int
+    ratio: int
+    max_cnt: int
+    min_sim: float
+
+    def __init__(self, base_path, input_folder, output_folder, node_file, hop=1, ratio=1, max_cnt=10, min_sim=0.5):
         self.base_path = base_path
         self.input_base_path = os.path.join(base_path, input_folder)
         self.output_base_path = os.path.join(base_path, output_folder)
 
         nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
-        nodes_set = nodes_set['node'].values.tolist()
-        self.full_node_list = nodes_set
-        self.node_file = node_file
+        self.full_node_list = nodes_set['node'].tolist()
+
+        self.hop = hop
+        self.ratio = ratio
+        self.max_cnt = max_cnt
+        self.min_sim = min_sim
 
         dir_helper.check_and_make_path(self.output_base_path)
         tem_dir = ['node_subgraph', 'structural_network']
         for tem in tem_dir:
             dir_helper.check_and_make_path(os.path.join(self.output_base_path, tem))
 
-    def get_structural_network_all_time(self, worker=-1, max_cnt=10, min_sim=0.5):
+    def get_structural_network_all_time(self, worker=-1):
         print("getting all timestamps structural network adjacent...")
 
         f_list = os.listdir(self.input_base_path)
@@ -43,7 +49,7 @@ class StructuralNetworkGenerator:
                 self.get_structural_network(
                     input_file=os.path.join(self.output_base_path, "node_subgraph", f_name),
                     output_file=os.path.join(self.output_base_path, "structural_network", f_name),
-                    file_num=length, i=i, max_cnt=max_cnt, min_sim=min_sim)
+                    file_num=length, i=i)
 
         else:
             worker = min(worker, length, os.cpu_count())
@@ -53,13 +59,13 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.get_structural_network, (
                     os.path.join(self.output_base_path, "node_subgraph", f_name),
-                    os.path.join(self.output_base_path, "structural_network", f_name), length, i, max_cnt, min_sim))
+                    os.path.join(self.output_base_path, "structural_network", f_name), length, i))
 
             pool.close()
             pool.join()
         print("got it...")
 
-    def get_structural_network(self, input_file, output_file, file_num, i, max_cnt=10, min_sim=0.5):
+    def get_structural_network(self, input_file, output_file, file_num, i):
         print('\t', str(file_num - i), ' file(s) left')
         if os.path.exists(output_file):
             print('\t', output_file, "exist")
@@ -92,7 +98,7 @@ class StructuralNetworkGenerator:
             structural_network.add_edges_from(df_sim.values.tolist())
             return
 
-        df_subgraph.apply(get_structural_neigbors, axis=1, max_cnt=max_cnt)
+        df_subgraph.apply(get_structural_neigbors, axis=1, max_cnt=self.max_cnt)
         # print('finish generate structural neighbors!')
         df_structural_edges = pd.DataFrame(list(structural_network.edges()), columns=['from_id', 'to_id'])
         del structural_network
@@ -105,14 +111,14 @@ class StructuralNetworkGenerator:
             wl_kernel.fit_transform([node_data_dict[series['from_id']]])
             return wl_kernel.transform([node_data_dict[series['to_id']]]).flatten()[0]
         df_structural_edges['weight'] = df_structural_edges.apply(calc_structural_similarity, axis=1)
-        print('real edges:', (df_structural_edges['weight'] >= min_sim).sum())
+        print('real edges:', (df_structural_edges['weight'] >= self.min_sim).sum())
         print('edge num: ', df_structural_edges.shape[0])
-        df_structural_edges = df_structural_edges.loc[df_structural_edges['weight'] >= min_sim]
+        df_structural_edges = df_structural_edges.loc[df_structural_edges['weight'] >= self.min_sim]
         df_structural_edges['weight'] = 1
         df_structural_edges.to_csv(output_file, sep='\t', index=True, header=True)
         print('\t', str(file_num - i), ' finished')
 
-    def prepare_subgraph_data_folder(self, layer=1, ratio=1, with_weight=True, worker=-1):
+    def prepare_subgraph_data_folder(self, with_weight=True, worker=-1):
         print("prepare subgraph data...")
 
         f_list = os.listdir(self.input_base_path)
@@ -122,7 +128,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 self.prepare_subgraph_data_file(input_file=os.path.join(self.input_base_path, f_name),
                                                 output_file=os.path.join(self.output_base_path, "node_subgraph", f_name),
-                                                file_num=length, i=i, layer=layer, ratio=ratio, with_weight=with_weight)
+                                                file_num=length, i=i, with_weight=with_weight)
         else:
             worker = min(worker, length, os.cpu_count())
             pool = multiprocessing.Pool(processes=worker)
@@ -131,15 +137,14 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.prepare_subgraph_data_file, (
                     os.path.join(self.input_base_path, f_name),
-                    os.path.join(self.output_base_path, "node_subgraph", f_name), length, i,
-                    layer, ratio, with_weight))
+                    os.path.join(self.output_base_path, "node_subgraph", f_name), length, i, with_weight))
 
             pool.close()
             pool.join()
 
         print("finish preparing subgraph data...")
 
-    def prepare_subgraph_data_file(self, input_file, output_file, file_num, i, layer=1, ratio=1, with_weight=True):
+    def prepare_subgraph_data_file(self, input_file, output_file, file_num, i, with_weight=True):
         print('\t', str(file_num - i), ' file(s) left')
         if os.path.exists(output_file):
             print('\t', output_file, "exist")
@@ -154,7 +159,7 @@ class StructuralNetworkGenerator:
         #whole_graph_adj_data['neighbor'] = 0
 
         # 邻接层数
-        # layer = 1
+        # hop = 1
         for node in graph.nodes:
             # 边邻接矩阵
             subgraph_nodes = [node]
@@ -166,16 +171,16 @@ class StructuralNetworkGenerator:
 
             if neighbor_num > 0:
                 neigbor_type = 1 # not single point
-                for i in range(layer):
-                    curlayer_neighbor = []
+                for i in range(self.hop):
+                    curhop_neighbor = []
                     for sub_node in need_ergodic:
                         neighbor_list = list(graph.neighbors(sub_node))
                         neighbor_num = len(neighbor_list)
-                        if 0 <= ratio < 1:
-                            neighbor_list = random.sample(neighbor_list, int(neighbor_num * ratio))
-                        curlayer_neighbor += neighbor_list
-                    need_ergodic = set(curlayer_neighbor) - set(subgraph_nodes)
-                    subgraph_nodes = set(subgraph_nodes + curlayer_neighbor)
+                        if 0 <= self.ratio < 1:
+                            neighbor_list = random.sample(neighbor_list, int(neighbor_num * self.ratio))
+                        curhop_neighbor += neighbor_list
+                    need_ergodic = set(curhop_neighbor) - set(subgraph_nodes)
+                    subgraph_nodes = set(subgraph_nodes + curhop_neighbor)
             # 有序化
             # 这里测一下graph subgraph在同质点的情况下，矩阵行数不一样会不会得分不一样
             subgraph_nodes = list(subgraph_nodes)
@@ -201,6 +206,7 @@ class StructuralNetworkGenerator:
 if __name__ == "__main__":
 
     s = StructuralNetworkGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
-                                   output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv")
-    s.prepare_subgraph_data_folder(worker=10, layer=1, ratio=1)
-    s.get_structural_network_all_time(worker=10, max_cnt=50, min_sim=0.5)
+                                   output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
+                                   hop=1, ratio=1, max_cnt=10, min_sim=0.5)
+    s.prepare_subgraph_data_folder(worker=10)
+    s.get_structural_network_all_time(worker=10)
