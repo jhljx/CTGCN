@@ -17,7 +17,7 @@ class StructuralNetworkGenerator:
     node_file: str
     full_node_list: list
 
-    def __init__(self, base_path, node_file, input_folder='1.format', output_folder='dynSPE'):
+    def __init__(self, base_path, node_file, input_folder='1.format', output_folder='RWT-GCN'):
         self.base_path = base_path
         self.input_base_path = os.path.join(base_path, input_folder)
         self.output_base_path = os.path.join(base_path, output_folder)
@@ -28,7 +28,7 @@ class StructuralNetworkGenerator:
         self.node_file = node_file
 
         dir_helper.check_and_make_path(self.output_base_path)
-        tem_dir = ['node_subgraph', 'structural_network_adjacent']
+        tem_dir = ['node_subgraph', 'structural_network']
         for tem in tem_dir:
             dir_helper.check_and_make_path(os.path.join(self.output_base_path, tem))
 
@@ -42,7 +42,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 self.get_structural_network(
                     input_file=os.path.join(self.output_base_path, "node_subgraph", f_name),
-                    output_file=os.path.join(self.output_base_path, "structural_network_adjacent", f_name),
+                    output_file=os.path.join(self.output_base_path, "structural_network", f_name),
                     file_num=length, i=i, max_cnt=max_cnt, min_sim=min_sim)
 
         else:
@@ -53,7 +53,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.get_structural_network, (
                     os.path.join(self.output_base_path, "node_subgraph", f_name),
-                    os.path.join(self.output_base_path, "structural_network_adjacent", f_name), length, i, max_cnt, min_sim))
+                    os.path.join(self.output_base_path, "structural_network", f_name), length, i, max_cnt, min_sim))
 
             pool.close()
             pool.join()
@@ -198,10 +198,9 @@ class StructuralNetworkGenerator:
         # whole_graph_adj_list = np.array(whole_graph_adj_data).tolist()
         print('\t', str(file_num - i), ' finished')
 
-
 if __name__ == "__main__":
 
     s = StructuralNetworkGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
-                                   output_folder="dynSPE", node_file="nodes_set\\nodes.csv")
-    # s.prepare_subgraph_data_folder(worker=10, layer=1, ratio=1)
+                                   output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv")
+    s.prepare_subgraph_data_folder(worker=10, layer=1, ratio=1)
     s.get_structural_network_all_time(worker=10, max_cnt=50, min_sim=0.5)
