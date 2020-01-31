@@ -1,5 +1,23 @@
+import os
+import networkx as nx
+import pandas as pd
 import traceback
 from time import time
+
+
+def check_and_make_path(to_make):
+    if not os.path.exists(to_make):
+        os.makedirs(to_make)
+
+
+def read_edgelist_from_dataframe(filename, full_node_list):
+    dataframe = pd.read_csv(filename, sep='\t')
+    # dataframe['weight'] = 1.0
+    graph = nx.from_pandas_edgelist(dataframe, "from_id", "to_id", edge_attr='weight',
+                                    create_using=nx.Graph)
+    graph.add_nodes_from(full_node_list)
+
+    return graph
 
 
 def separate(info='', sep='=', num=5):
@@ -17,7 +35,7 @@ def time_filter_with_dict_param(func, **kwargs):
         func(**kwargs)
         t2 = time()
         print(func.__name__, " spends ", t2 - t1, 'ms')
-    except:
+    except Exception as e:
         traceback.print_exc()
 
 
@@ -26,16 +44,3 @@ def time_filter_with_tuple_param(func, *args):
     func(*args)
     t2 = time()
     print(func.__name__, " spends ", t2 - t1, 'ms')
-
-
-def test_sum(n):
-    result = 1
-    for i in range(n):
-        result *= n
-    return result
-
-
-if __name__ == "__main__":
-    # time_filter_with_dict_param(test_sum, n=500)
-    # time_filter_with_dict_param(test_sum, n=5000)
-    separate()

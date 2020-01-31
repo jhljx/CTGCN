@@ -1,9 +1,7 @@
-#coding: utf-8
 import numpy as np
 import pandas as pd
 import os, multiprocessing, random
-from utils import dir_helper
-from utils.read_format_data import read_edgelist_from_dataframe
+from RWTGCN.utils import check_and_make_path, read_edgelist_from_dataframe
 
 import networkx as nx
 from grakel import GraphKernel
@@ -33,10 +31,10 @@ class StructuralNetworkGenerator:
         self.max_cnt = max_cnt
         self.min_sim = min_sim
 
-        dir_helper.check_and_make_path(self.output_base_path)
+        check_and_make_path(self.output_base_path)
         tem_dir = ['node_subgraph', 'structural_network']
         for tem in tem_dir:
-            dir_helper.check_and_make_path(os.path.join(self.output_base_path, tem))
+            check_and_make_path(os.path.join(self.output_base_path, tem))
 
     def get_structural_network_all_time(self, worker=-1):
         print("getting all timestamps structural network adjacent...")
