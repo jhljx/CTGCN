@@ -14,7 +14,7 @@ class StructuralNetworkGenerator:
     full_node_list: list
 
     hop: int
-    ratio: int
+    ratio: float
     max_cnt: int
     min_sim: float
 
@@ -57,7 +57,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.get_structural_network, (
                     os.path.join(self.output_base_path, "node_subgraph", f_name),
-                    os.path.join(self.output_base_path, "structural_network", f_name), length, i))
+                    os.path.join(self.output_base_path, "structural_network", f_name), length, i, ))
 
             pool.close()
             pool.join()
@@ -135,7 +135,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.prepare_subgraph_data_file, (
                     os.path.join(self.input_base_path, f_name),
-                    os.path.join(self.output_base_path, "node_subgraph", f_name), length, i, with_weight))
+                    os.path.join(self.output_base_path, "node_subgraph", f_name), length, i, with_weight, ))
 
             pool.close()
             pool.join()
@@ -175,10 +175,11 @@ class StructuralNetworkGenerator:
                         neighbor_list = list(graph.neighbors(sub_node))
                         neighbor_num = len(neighbor_list)
                         if 0 <= self.ratio < 1:
-                            neighbor_list = random.sample(neighbor_list, int(neighbor_num * self.ratio))
+                            sample_neighbor_num = round(neighbor_num * self.ratio)
+                            neighbor_list = random.sample(neighbor_list, sample_neighbor_num)
                         curhop_neighbor += neighbor_list
                     need_ergodic = set(curhop_neighbor) - set(subgraph_nodes)
-                    subgraph_nodes = set(subgraph_nodes + curhop_neighbor)
+                    subgraph_nodes = set(list(subgraph_nodes) + curhop_neighbor)
             # 有序化
             # 这里测一下graph subgraph在同质点的情况下，矩阵行数不一样会不会得分不一样
             subgraph_nodes = list(subgraph_nodes)

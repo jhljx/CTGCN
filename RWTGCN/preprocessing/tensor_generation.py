@@ -40,9 +40,13 @@ class TensorGenerator:
             print("\t", length - i, "file(s) left")
             original_graph_path = os.path.join(self.input_base_path, f_name)
             structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
+            t1 = time.time()
             walks = self.random_walk.get_walk_sequences(original_graph_path=original_graph_path,
                                                         structural_graph_path=structural_graph_path)
+            t2 = time.time()
             self.generate_tensor(walks, f_name, worker=worker)
+            t3 = time.time()
+            print('random walk time: ', t2 - t1, ' seconds, tensor generation time: ', t3 - t2, ' seconds!')
 
     # 多worker，大文件时候好像pool回收会有问题，卡了好久
     def generate_tensor(self, walks, f_name, worker=-1):
@@ -74,6 +78,9 @@ class TensorGenerator:
 
         from scipy.sparse import lil_matrix
         spmat = lil_matrix((node_num, node_num))
+        count_sum = 0
+        count_dict = dict(zip(np.arange(node_num), np.zeros(node_num)))
+
         for walk in walks:
             left = 0
             right = left + i
@@ -83,9 +90,23 @@ class TensorGenerator:
                 right_idx = nid2idx_dict[walk[right]]
                 spmat[left_idx, right_idx] += 1
                 spmat[right_idx, left_idx] += 1
+
+                count_dict[left_idx] += 1
+                count_dict[right_idx] += 1
+                count_sum += 2
+
                 left += 1
                 right += 1
+
         spmat = spmat.tocoo()
+        df_PPMI = pd.DataFrame([spmat.row, spmat.col, spmat.data], columns=['row', 'col', 'data'])
+        def calc_PPMI(series):
+            res = np.log(series['data'] * count_sum / (count_dict[series['row']] * count_dict[series['col']]))
+            if res < 0:
+                return 0
+            return res
+        df_PPMI['data'] = df_PPMI.apply(calc_PPMI, axis=1)
+        spmat = sparse.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
         sparse.save_npz(os.path.join(output_dir_path, str(i) + ".npz"), spmat)
         t2 = time.time()
         print("\t\t\tinterval:", str(i), "finished, use", t2 - t1, "seconds")
@@ -93,5 +114,6 @@ class TensorGenerator:
 
 if __name__ == "__main__":
     tg = TensorGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
-                         output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv")
+                         output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
+                         walk_time=100, walk_length=5, p=0.5)
     tg.generate_tensor_all_time(worker=-1)

@@ -82,20 +82,10 @@ class GatedGCN(nn.Module):
         self.dropout = dropout
         self.bias = bias
 
-        step_dim = (input_dim - output_dim) / layer_num
-        assert step_dim > 0
-
         self.gc_list = []
-        if (input_dim - output_dim) % layer_num == 0:
-            self.gc_list.append(GatedGraphConvolution(input_dim, input_dim - step_dim, bias=bias))
-            input_dim -= step_dim
-        else:
-            remain_dim = (input_dim - output_dim) % layer_num
-            self.gc_list.append(GatedGraphConvolution(input_dim, input_dim - remain_dim - step_dim, bias=bias))
-            input_dim -= remain_dim + step_dim
+        self.gc_list.append(GatedGraphConvolution(input_dim, output_dim, bias=bias))
         for i in range(1, layer_num):
-            self.gc_list.append(GatedGraphConvolution(input_dim, input_dim - step_dim, bias=bias))
-            input_dim -= step_dim
+            self.gc_list.append(GatedGraphConvolution(output_dim, output_dim, bias=bias))
 
     def forward(self, x, adj_list):
         assert self.layer_num == len(adj_list)
@@ -194,41 +184,36 @@ class GCLSTMCell(nn.Module):
 
 class Infomax(nn.Module):
     input_dim: int
-    output_dim: int
     bias: int
 
-    def __init__(self, input_dim, output_dim, bias=True):
+    def __init__(self, input_dim, bias=True):
         super(Infomax, self).__init__()
         self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.bias = bias
-        # bilinear layer weight
-        self.w = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
-        if bias:
-            self.b = nn.Parameter(torch.FloatTensor(output_dim))
-        else:
-            self.register_parameter('b', None)
-        self.reset_parameters()
+        self.bln = nn.Bilinear(self.input_dim, self.input_dim, 1, bias=bias)
+        for m in self.modules():
+            self.weights_init(m)
 
-    def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.output_dim)
-        self.w.data.uniform_(-stdv, stdv)
-        if self.b is not None:
-            self.b.data.uniform_(-stdv, stdv)
+    def weights_init(self, m):
+        if isinstance(m, nn.Bilinear):
+            torch.nn.init.xavier_uniform_(m.weight.data)
+            if m.bias is not None:
+                m.bias.data.fill_(0.0)
 
-    def forward(self, x, pos_hx, neg_hx):
-        # x is sparse tensor
-        if x.layout == torch.sparse_coo:
-            res = torch.sparse.mm(x, self.w)
-            pos_score = torch.mm(res, pos_hx)
-            neg_score = torch.mm(res, neg_hx)
-        # x is dense tensor
-        else:
-            res = torch.mm(x, self.w)
-            pos_score = torch.mm(res, pos_hx)
-            neg_score = torch.mm(res, neg_hx)
-        if self.b is not None:
-            pos_score += self.b
-            neg_score += self.b
-        pos_neg = torch.cat((pos_score, neg_score), 1)
-        return pos_neg
+    def forward(self, c, pos_hx, neg_hx):
+        c_x = torch.unsqueeze(c, 1)
+        c_x = c_x.expand_as(pos_hx)
+
+        pos_score = torch.squeeze(self.bln(pos_hx, c_x), 2)
+        neg_score = torch.squeeze(self.bln(neg_hx, c_x), 2)
+        return pos_score, neg_score
+
+
+# Applies an average on seq, of shape (batch, nodes, features)
+# While taking into account the masking of msk
+class Readout(nn.Module):
+    def __init__(self):
+        super(Readout, self).__init__()
+
+    def forward(self, seq):
+        res = torch.mean(seq, 1)
+        return F.sigmoid(res)
