@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
-import os, multiprocessing, time
-from scipy import sparse
-from RWTGCN.utils import check_and_make_path
-from RWTGCN.preprocessing.random_walk import HybridRandomWalk
+import os, multiprocessing, time, random
+import scipy.sparse as sp
+from RWTGCN.utils import check_and_make_path, read_edgelist_from_dataframe
+# from RWTGCN.preprocessing.random_walk import HybridRandomWalk
 
 
 class TensorGenerator:
@@ -11,8 +11,9 @@ class TensorGenerator:
     input_base_path: str
     output_base_path: str
     full_node_list: list
-    random_walk: HybridRandomWalk
+    walk_time: int
     walk_length: int
+    p: float
 
     # 这里的孤点(在nodelist而不在edgelist中的一定不会有游走序列，所以就不再图里添加这些孤点了)
     def __init__(self, base_path, input_folder, output_folder, node_file, walk_time=100, walk_length=5, p=0.5):
@@ -23,93 +24,114 @@ class TensorGenerator:
         nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
 
-        self.random_walk = HybridRandomWalk(base_path, input_folder, output_folder, node_file,
-                                            walk_time=walk_time, walk_length=walk_length, p=p)
+        self.walk_time = walk_time
         self.walk_length = walk_length
+        self.p = p
 
         check_and_make_path(self.output_base_path)
         tem_dir = ['walk_tensor']
         for tem in tem_dir:
             check_and_make_path(os.path.join(self.output_base_path, tem))
 
+    def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=True):
+        f_folder = f_name.split('.')[0]
+        output_dir_path = os.path.join(self.output_base_path, 'walk_tensor', f_folder)
+
+        original_graph = read_edgelist_from_dataframe(original_graph_path, self.full_node_list)
+        structural_graph = read_edgelist_from_dataframe(structural_graph_path, self.full_node_list)
+        nodes = self.full_node_list.copy()
+        original_graph_dict, structural_graph_dict = {}, {}
+        # preprocessing
+        for node in nodes:
+            original_neighbors = list(original_graph.neighbors(node))
+            original_weight = np.array([original_graph[node][i]['weight'] for i in original_neighbors])
+            original_graph_dict[node] = {'neighbor': original_neighbors}
+            original_graph_dict[node]['weight'] = original_weight / original_weight.sum()
+
+            structural_neighbors = list(structural_graph.neighbors(node))
+            structural_weight = np.array([structural_graph[node][i]['weight'] for i in structural_neighbors])
+            structural_graph_dict[node] = {'neighbor': structural_neighbors}
+            structural_graph_dict[node]['weight'] = structural_weight / structural_weight.sum()
+
+        node_num = len(self.full_node_list)
+        nid2idx_dict = dict(zip(self.full_node_list, np.arange(node_num).tolist()))
+
+        spmat_list, node_count_list, all_count_list = [sp.lil_matrix(1,1)], [[]], [-1]
+        spmat_list += [sp.lil_matrix((node_num, node_num)) for i in range(self.walk_length)]
+        node_count_list += [np.zeros(node_num).tolist() for i in range(self.walk_length)]
+        all_count_list += np.zeros(self.walk_length).tolist()
+
+        # random walk
+        for iter in range(self.walk_time):
+            for node in nodes:
+                eps = 1e-8
+                walk = [node]
+                while len(walk) < self.walk_length + 1:
+                    cur = walk[-1]
+                    rd = random.random()
+                    if rd <= self.p + eps:
+                        neighbors = original_graph_dict[cur]['neighbor']
+                        weights = original_graph_dict[cur]['weight']
+                    else:
+                        neighbors = structural_graph_dict[cur]['neighbor']
+                        weights = structural_graph_dict[cur]['weight']
+                    if len(neighbors) == 0:
+                        break
+                    walk.append(random.choice(neighbors, p=weights) if weight else random.choice(neighbors))
+                for i in range(self.walk_length + 1):
+                    for j in range(i + 1, self.walk_length + 1):
+                        step = j - i
+                        left_idx = nid2idx_dict[walk[i]]
+                        right_idx = nid2idx_dict[walk[j]]
+                        spmat = spmat_list[step]
+                        node_count = node_count_list[step]
+                        all_count = all_count_list[step]
+
+                        spmat[left_idx, right_idx] += 1
+                        spmat[right_idx, left_idx] += 1
+                        node_count[left_idx] += 1
+                        node_count[right_idx] += 1
+                        all_count += 2
+        # calculate PPMI values
+        for i in range(1, self.walk_length + 1):
+            spmat = spmat_list[i].tocoo()
+            node_count = node_count_list[i]
+            all_count = all_count_list[i]
+            df_PPMI = pd.DataFrame({'row': spmat.row, 'col': spmat.col, 'data': spmat.data})
+
+            def calc_PPMI(series):
+                res = np.log(series['data'] * all_count / (node_count[series['row']] * node_count[series['col']]))
+                if res < 0:
+                    return 0
+                return res
+            df_PPMI['data'] = df_PPMI.apply(calc_PPMI, axis=1)
+            spmat = sp.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
+            sp.save_npz(os.path.join(output_dir_path, str(i) + ".npz"), spmat)
+        return
+
     def generate_tensor_all_time(self, worker=-1):
         print("all file(s) in folder transform to tensor...")
         f_list = os.listdir(self.input_base_path)
         length = len(f_list)
-        for i, f_name in enumerate(f_list):
-            print("\t", length - i, "file(s) left")
-            original_graph_path = os.path.join(self.input_base_path, f_name)
-            structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
-            t1 = time.time()
-            walks = self.random_walk.get_walk_sequences(original_graph_path=original_graph_path,
-                                                        structural_graph_path=structural_graph_path)
-            t2 = time.time()
-            self.generate_tensor(walks, f_name, worker=worker)
-            t3 = time.time()
-            print('random walk time: ', t2 - t1, ' seconds, tensor generation time: ', t3 - t2, ' seconds!')
-
-    # 多worker，大文件时候好像pool回收会有问题，卡了好久
-    def generate_tensor(self, walks, f_name, worker=-1):
-        print("\t\tget distribution tensor...")
-        f_folder = f_name.split('.')[0]
-        output_folder = os.path.join(self.output_base_path, 'walk_tensor', f_folder)
-        if os.path.exists(output_folder) and len(os.listdir(output_folder)) == self.walk_length:
-            print('\t\t', f_name, "is processed")
-            return
-        check_and_make_path(output_folder)
         if worker <= 0:
-            for i in range(1, self.walk_length + 1):
-                self.single_layer(walks, output_folder, i)
+            for i, f_name in enumerate(f_list):
+                original_graph_path = os.path.join(self.input_base_path, f_name)
+                structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
+                t1 = time.time()
+                self.generate_tensor(f_name, original_graph_path=original_graph_path,
+                                     structural_graph_path=structural_graph_path)
+                t2 = time.time()
+                print('generate tensor time: ', t2 - t1, ' seconds!')
         else:
             worker = min(os.cpu_count(), self.walk_length, worker)
             pool = multiprocessing.Pool(processes=worker)
             print("\t\tstart " + str(worker) + " worker(s)")
-            for i in range(1, self.walk_length + 1):
-                pool.apply_async(self.single_layer, (walks, output_folder, i))
+            for i, f_name in enumerate(f_list):
+                original_graph_path = os.path.join(self.input_base_path, f_name)
+                structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
+                pool.apply_async(self.generate_tensor, (f_name, original_graph_path, structural_graph_path))
             pool.close()
             pool.join()
-        print("\t\tdistribution tensor got")
-
-    def single_layer(self, walks, output_dir_path, i):
-        print("\t\t\tinterval:", str(i))
-        t1 = time.time()
-        node_num = len(self.full_node_list)
-        nid2idx_dict = dict(zip(self.full_node_list, np.arange(node_num).tolist()))
-
-        from scipy.sparse import lil_matrix
-        spmat = lil_matrix((node_num, node_num))
-        count_sum = 0
-        count_dict = dict(zip(np.arange(node_num), np.zeros(node_num)))
-
-        for walk in walks:
-            left = 0
-            right = left + i
-            length = len(walk)
-            while right < length:
-                left_idx = nid2idx_dict[walk[left]]
-                right_idx = nid2idx_dict[walk[right]]
-                spmat[left_idx, right_idx] += 1
-                spmat[right_idx, left_idx] += 1
-
-                count_dict[left_idx] += 1
-                count_dict[right_idx] += 1
-                count_sum += 2
-
-                left += 1
-                right += 1
-
-        spmat = spmat.tocoo()
-        df_PPMI = pd.DataFrame([spmat.row, spmat.col, spmat.data], columns=['row', 'col', 'data'])
-        def calc_PPMI(series):
-            res = np.log(series['data'] * count_sum / (count_dict[series['row']] * count_dict[series['col']]))
-            if res < 0:
-                return 0
-            return res
-        df_PPMI['data'] = df_PPMI.apply(calc_PPMI, axis=1)
-        spmat = sparse.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
-        sparse.save_npz(os.path.join(output_dir_path, str(i) + ".npz"), spmat)
-        t2 = time.time()
-        print("\t\t\tinterval:", str(i), "finished, use", t2 - t1, "seconds")
 
 
 if __name__ == "__main__":
