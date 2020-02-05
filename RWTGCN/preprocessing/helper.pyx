@@ -7,8 +7,24 @@ cimport numpy as np
 import time
 cimport cython
 
-def random_walk(original_graph_dict, structural_graph_dict, node_list, output_dir_path,
+def random_walk(original_graph, structural_graph, node_list, output_dir_path,
                 int walk_length, int walk_time, double prob, bint weight):
+    # t1 = time.time()
+    original_graph_dict, structural_graph_dict = {}, {}
+    # preprocessing
+    for node in node_list:
+        original_neighbors = list(original_graph.neighbors(node))
+        # cdef int neighbor_size = len(original_neighbors)
+        original_weight = np.array([original_graph[node][neighbor]['weight'] for neighbor in original_neighbors])
+        original_graph_dict[node] = {'neighbor': original_neighbors}
+        original_graph_dict[node]['weight'] = original_weight / original_weight.sum()
+
+        structural_neighbors = list(structural_graph.neighbors(node))
+        structural_weight = np.array([structural_graph[node][neighbor]['weight'] for neighbor in structural_neighbors])
+        structural_graph_dict[node] = {'neighbor': structural_neighbors}
+        structural_graph_dict[node]['weight'] = structural_weight / structural_weight.sum()
+    # t2 =time.time()
+    #print('build graph time: ', t2 - t1, ' seconds!')
 
     node_num = len(node_list)
     nid2idx_dict = dict(zip(node_list, np.arange(node_num).tolist()))
@@ -27,10 +43,10 @@ def random_walk(original_graph_dict, structural_graph_dict, node_list, output_di
     cdef int cnt = 1
     cdef int maxnum = walk_length + 1
     t1 = time.time()
-    print('start random walk！')
+    # print('start random walk！')
     # random walk
-    for iter in range(walk_time):
-        for nidx in range(num):
+    for nidx in range(num):
+        for iter in range(walk_time):
             # print('nidx = ', nidx)
             start_node = node_list[nidx]
             eps = 1e-8
@@ -63,13 +79,16 @@ def random_walk(original_graph_dict, structural_graph_dict, node_list, output_di
                     node_count[left_idx] += 1
                     node_count[right_idx] += 1
                     all_count_list[step] += 2
-    print('finish random walk！')
-    t2 = time.time()
-    print('random walk time: ', t2 - t1, ' seconds!')
+    # print('finish random walk！')
+    del original_graph_dict
+    del structural_graph_dict
+    # t2 = time.time()
+    # print('random walk time: ', t2 - t1, ' seconds!')
     # calculate PPMI values
-    print(all_count_list)
-    print('start calc PPMI and save files!')
+    # print(all_count_list)
+    # print('start calc PPMI and save files!')
     cdef int idx = 0
+
     for idx in range(1, walk_length + 1):
         spmat = spmat_list[idx].tocoo()
         node_count = node_count_list[idx]
@@ -85,11 +104,11 @@ def random_walk(original_graph_dict, structural_graph_dict, node_list, output_di
         spmat = sp.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
 
         sp.save_npz(os.path.join(output_dir_path, str(idx) + ".npz"), spmat)
-    print('finish calc PPMI and save files!')
-    t3 = time.time()
-    print('PPMI calculation time: ', t3 - t2, ' seconds!')
+    # print('finish calc PPMI and save files!')
+    # t3 = time.time()
+    # print('PPMI calculation time: ', t3 - t2, ' seconds!')
 
-# get unique values from array with tolerance=1e-6
+# get unique values from array with tolerance=1e-12
 def uniquetol(data_arr, cluster=False):
     idx_arr = np.argsort(data_arr)
     data_num = len(idx_arr)

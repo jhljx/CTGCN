@@ -5,7 +5,7 @@ import networkx as nx
 import torch, os, traceback
 from time import time
 from sympy import sieve
-from RWTGCN.preprocessing.helper import uniquetol
+from numpy import random
 
 def check_and_make_path(to_make):
     if not os.path.exists(to_make):
@@ -19,31 +19,6 @@ def read_edgelist_from_dataframe(filename, full_node_list):
                                     create_using=nx.Graph)
     graph.add_nodes_from(full_node_list)
     return graph
-
-def build_graph(graph_path, node_list):
-    node_num = len(node_list)
-    graph = dict(zip(node_list, [{}] * node_num))
-    df_graph = pd.read_csv(graph_path, sep='\t')
-    def func(series):
-        from_node = series['from_id']
-        to_node = series['to_id']
-        weight = series['weight']
-        if to_node not in graph[from_node]:
-            graph[from_node][to_node] = weight
-            graph[to_node][from_node] = weight
-        else:
-            graph[from_node][to_node] = max(graph[from_node][to_node], weight)
-            graph[from_node][to_node] = max(graph[from_node][to_node], weight)
-        return
-    df_graph.apply(func, axis=1)
-
-    graph_dict = dict()
-    for node, neighbor_dict in graph.items():
-        graph_dict[node] = {'neighbor': list(neighbor_dict.keys())}
-        weight_arr = np.array(list(neighbor_dict.values()))
-        weight_arr = weight_arr / weight_arr.sum()
-        graph_dict[node]['weight'] = weight_arr.tolist()
-    return graph_dict
 
 def normalize(mx):
     """Row-normalize sparse matrix"""
@@ -79,6 +54,38 @@ def get_normalize_PPMI_adj(spmat):
 #                                 .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
 #     return str(decimal_val)
 
+# get unique values from array with tolerance=1e-12
+def uniquetol(data_arr, cluster=False):
+    idx_arr = np.argsort(data_arr)
+    data_num = len(idx_arr)
+    idx_order_dict = dict(zip(idx_arr.tolist(), np.ones(data_num).tolist()))
+    pos = 0
+    value = 1
+    max_num = data_num
+    while pos < max_num:
+        idx_order_dict[idx_arr[pos]] = value
+        while(pos + 1 < max_num):
+            if np.abs(data_arr[idx_arr[pos]] - data_arr[idx_arr[pos + 1]]) >= 1e-12:
+                value += 1
+                break
+            idx_order_dict[idx_arr[pos + 1]] = value
+            pos += 1
+        pos += 1
+    cluster_dict = dict()
+    def map_func(idx):
+        label = idx_order_dict[idx]
+        if cluster == True:
+            if label not in cluster_dict:
+                cluster_dict[label] = [idx]
+            else:
+                cluster_dict[label].append(idx)
+        return label
+    vfunc = np.vectorize(map_func)
+    labels = vfunc(np.arange(data_num))
+    if cluster == True:
+        return labels, cluster_dict
+    return labels
+
 def wl_transform(spadj, labels, cluster=False):
     # the ith entry is equal to the 2 ^ (i - 1)'th prime
     prime_list = [2, 3, 7, 19, 53, 131, 311, 719, 1619, 3671, 8161, 17863, 38873, 84017, 180503,
@@ -98,7 +105,84 @@ def wl_transform(spadj, labels, cluster=False):
     signatures = labels + spadj.dot(log_primes).reshape(-1)
     #print(signatures)
     # map signatures to integers counting from 1
+    try:
+        import RWTGCN.preprocessing.helper as helper
+        return helper.uniquetol(signatures, cluster=cluster)
+    except:
+        pass
     return uniquetol(signatures, cluster=cluster)
+
+def random_walk(original_graph, structural_graph, node_list, output_dir_path,
+                walk_length, walk_time, prob, weight):
+    original_graph_dict, structural_graph_dict = {}, {}
+    # preprocessing
+    for node in node_list:
+        original_neighbors = list(original_graph.neighbors(node))
+        original_weight = np.array([original_graph[node][i]['weight'] for i in original_neighbors])
+        original_graph_dict[node] = {'neighbor': original_neighbors}
+        original_graph_dict[node]['weight'] = original_weight / original_weight.sum()
+
+        structural_neighbors = list(structural_graph.neighbors(node))
+        structural_weight = np.array([structural_graph[node][i]['weight'] for i in structural_neighbors])
+        structural_graph_dict[node] = {'neighbor': structural_neighbors}
+        structural_graph_dict[node]['weight'] = structural_weight / structural_weight.sum()
+
+    node_num = len(node_list)
+    nid2idx_dict = dict(zip(node_list, np.arange(node_num).tolist()))
+
+    spmat_list, node_count_list, all_count_list = [sp.lil_matrix(1, 1)], [[]], [-1]
+    spmat_list += [sp.lil_matrix((node_num, node_num)) for i in range(walk_length)]
+    node_count_list += [np.zeros(node_num, dtype=int).tolist() for i in range(walk_length)]
+    all_count_list += np.zeros(walk_length, dtype=int).tolist()
+
+    # random walk
+    for node in node_list:
+        for iter in range(walk_time):
+            eps = 1e-8
+            walk = [node]
+            while len(walk) < walk_length + 1:
+                cur = walk[-1]
+                rd = random.random()
+                if rd <= prob + eps:
+                    neighbors = original_graph_dict[cur]['neighbor']
+                    weights = original_graph_dict[cur]['weight']
+                else:
+                    neighbors = structural_graph_dict[cur]['neighbor']
+                    weights = structural_graph_dict[cur]['weight']
+                if len(neighbors) == 0:
+                    break
+                walk.append(random.choice(neighbors, p=weights) if weight else random.choice(neighbors))
+            seq_len = len(walk)
+            for i in range(seq_len):
+                for j in range(i + 1, seq_len):
+                    step = j - i
+                    left_idx = nid2idx_dict[walk[i]]
+                    #print(j, walk[j])
+                    right_idx = nid2idx_dict[walk[j]]
+                    spmat = spmat_list[step]
+                    node_count = node_count_list[step]
+
+                    spmat[left_idx, right_idx] += 1
+                    spmat[right_idx, left_idx] += 1
+                    node_count[left_idx] += 1
+                    node_count[right_idx] += 1
+                    all_count_list[step] += 2
+    # calculate PPMI values
+    for i in range(1, walk_length + 1):
+        spmat = spmat_list[i].tocoo()
+        node_count = node_count_list[i]
+        all_count = all_count_list[i]
+        df_PPMI = pd.DataFrame({'row': spmat.row, 'col': spmat.col, 'data': spmat.data}, dtype=int)
+
+        def calc_PPMI(series):
+            res = np.log(series['data'] * all_count / (node_count[series['row']] * node_count[series['col']]))
+            if res < 0:
+                return 0
+            return res
+
+        df_PPMI['data'] = df_PPMI.apply(calc_PPMI, axis=1)
+        spmat = sp.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
+        sp.save_npz(os.path.join(output_dir_path, str(i) + ".npz"), spmat)
 
 
 def separate(info='', sep='=', num=5):
