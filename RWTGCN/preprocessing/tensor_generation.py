@@ -101,20 +101,18 @@ class TensorGenerator:
                         right_idx = nid2idx_dict[walk[j]]
                         spmat = spmat_list[step]
                         node_count = node_count_list[step]
-                        all_count = all_count_list[step]
 
                         spmat[left_idx, right_idx] += 1
                         spmat[right_idx, left_idx] += 1
                         node_count[left_idx] += 1
                         node_count[right_idx] += 1
-                        all_count += 2
+                        all_count_list[step] += 2
         # calculate PPMI values
         for i in range(1, self.walk_length + 1):
             spmat = spmat_list[i].tocoo()
             node_count = node_count_list[i]
             all_count = all_count_list[i]
-            df_PPMI = pd.DataFrame({'row': spmat.row, 'col': spmat.col}, dtype=int)
-            df_PPMI['data'] = spmat.data
+            df_PPMI = pd.DataFrame({'row': spmat.row, 'col': spmat.col, 'data': spmat.data}, dtype=int)
 
             def calc_PPMI(series):
                 res = np.log(series['data'] * all_count / (node_count[series['row']] * node_count[series['col']]))
