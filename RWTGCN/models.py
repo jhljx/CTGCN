@@ -187,7 +187,7 @@ class DynamicEmbedding:
         for i in range(epoch):
             ## 1. forward propagation
             embedding_list = model(x_list, adj_list)
-            print('finish forward!')
+            # print('finish forward!')
             ## 2. loss calculation
             loss = self.loss(embedding_list)
             optimizer.zero_grad()  # 清零梯度缓存
@@ -210,11 +210,10 @@ class DynamicEmbedding:
         torch.save(model.state_dict(), os.path.join(self.model_base_path, "RWTGCN_model"))
         return embedding_list
 
-
 if __name__ == '__main__':
     dyEmbedding = DynamicEmbedding(base_path="..\\data\\email-eu\\RWT-GCN", walk_folder='walk_pairs',
                                    freq_folder='node_freq',  tensor_folder="walk_tensor",
                                    embedding_folder="embedding", node_file="..\\nodes_set\\nodes.csv",
-                                   output_dim=128, dropout=0.5, duration=1, neg_num=50, Q=10,
+                                   output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
                                    unit_type='GRU', bias=True)
     dyEmbedding.learn_embedding(epoch=50, lr=0.01, start_idx=0, weight_decay=0.0005, export=True)
