@@ -72,8 +72,8 @@ class TensorGenerator:
 
         spmat_list, node_count_list, all_count_list = [sp.lil_matrix(1, 1)], [[]], [-1]
         spmat_list += [sp.lil_matrix((node_num, node_num)) for i in range(self.walk_length)]
-        node_count_list += [np.zeros(node_num).tolist() for i in range(self.walk_length)]
-        all_count_list += np.zeros(self.walk_length).tolist()
+        node_count_list += [np.zeros(node_num, dtype=int).tolist() for i in range(self.walk_length)]
+        all_count_list += np.zeros(self.walk_length, dtype=int).tolist()
 
         # random walk
         for iter in range(self.walk_time):
