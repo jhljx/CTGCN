@@ -8,11 +8,11 @@ class Processing:
     tensor_generator: TensorGenerator
 
     def __init__(self, base_path, input_folder, output_folder, node_file, hop=5, max_neighbor_num=100,
-                 walk_time=100, walk_length=5, p=0.5):
+                 walk_time=100, walk_length=5, prob=0.5):
         self.structure_generator = StructuralNetworkGenerator(base_path, input_folder, output_folder, node_file,
                                                               hop=hop, max_neighbor_num=max_neighbor_num)
         self.tensor_generator = TensorGenerator(base_path, input_folder, output_folder, node_file,
-                                                walk_time=walk_time, walk_length=walk_length, p=p)
+                                                walk_time=walk_time, walk_length=walk_length, prob=prob)
         return
 
     def run(self, worker=-1):
@@ -29,5 +29,5 @@ class Processing:
 if __name__ == '__main__':
     processing = Processing(base_path="..\\..\\data\\email-eu", input_folder="1.format",
                             output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
-                            hop=5, max_neighbor_num=100, walk_time=100, walk_length=5, p=0.5)
-    processing.run(worker=2)
+                            hop=5, max_neighbor_num=100, walk_time=100, walk_length=5, prob=0.5)
+    processing.run(worker=-1)

@@ -5,6 +5,7 @@ import networkx as nx
 import torch, os, traceback
 from time import time
 from sympy import sieve
+from RWTGCN.preprocessing.helper import uniquetol
 
 def check_and_make_path(to_make):
     if not os.path.exists(to_make):
@@ -12,13 +13,37 @@ def check_and_make_path(to_make):
 
 
 def read_edgelist_from_dataframe(filename, full_node_list):
-    dataframe = pd.read_csv(filename, sep='\t')
+    df = pd.read_csv(filename, sep='\t')
     # dataframe['weight'] = 1.0
-    graph = nx.from_pandas_edgelist(dataframe, "from_id", "to_id", edge_attr='weight',
+    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
                                     create_using=nx.Graph)
     graph.add_nodes_from(full_node_list)
     return graph
 
+def build_graph(graph_path, node_list):
+    node_num = len(node_list)
+    graph = dict(zip(node_list, [{}] * node_num))
+    df_graph = pd.read_csv(graph_path, sep='\t')
+    def func(series):
+        from_node = series['from_id']
+        to_node = series['to_id']
+        weight = series['weight']
+        if to_node not in graph[from_node]:
+            graph[from_node][to_node] = weight
+            graph[to_node][from_node] = weight
+        else:
+            graph[from_node][to_node] = max(graph[from_node][to_node], weight)
+            graph[from_node][to_node] = max(graph[from_node][to_node], weight)
+        return
+    df_graph.apply(func, axis=1)
+
+    graph_dict = dict()
+    for node, neighbor_dict in graph.items():
+        graph_dict[node] = {'neighbor': list(neighbor_dict.keys())}
+        weight_arr = np.array(list(neighbor_dict.values()))
+        weight_arr = weight_arr / weight_arr.sum()
+        graph_dict[node]['weight'] = weight_arr.tolist()
+    return graph_dict
 
 def normalize(mx):
     """Row-normalize sparse matrix"""
@@ -48,42 +73,11 @@ def get_normalize_PPMI_adj(spmat):
     adj = sparse_mx_to_torch_sparse_tensor(adj)
     return adj
 
-def round_func(val):
-    from decimal import Decimal, ROUND_HALF_UP
-    decimal_val = Decimal(val).quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP) \
-                                .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
-    return str(decimal_val)
-
-# get unique values from array with tolerance=1e-6
-def uniquetol(data_arr, cluster=False):
-    idx_arr = np.argsort(data_arr)
-    data_num = len(idx_arr)
-    idx_order_dict = dict(zip(idx_arr.tolist(), np.ones(data_num).tolist()))
-    pos = 0
-    value = 1
-    while pos < data_num:
-        idx_order_dict[idx_arr[pos]] = value
-        while(pos + 1 < data_num):
-            if np.abs(data_arr[idx_arr[pos]] - data_arr[idx_arr[pos + 1]]) >= 1e-12:
-                value += 1
-                break
-            idx_order_dict[idx_arr[pos + 1]] = value
-            pos += 1
-        pos += 1
-    cluster_dict = dict()
-    def map_func(idx):
-        label = idx_order_dict[idx]
-        if cluster == True:
-            if label not in cluster_dict:
-                cluster_dict[label] = [idx]
-            else:
-                cluster_dict[label].append(idx)
-        return label
-    vfunc = np.vectorize(map_func)
-    labels = vfunc(np.arange(data_num))
-    if cluster == True:
-        return labels, cluster_dict
-    return labels
+# def round_func(val):
+#     from decimal import Decimal, ROUND_HALF_UP
+#     decimal_val = Decimal(val).quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP) \
+#                                 .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
+#     return str(decimal_val)
 
 def wl_transform(spadj, labels, cluster=False):
     # the ith entry is equal to the 2 ^ (i - 1)'th prime
