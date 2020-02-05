@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import networkx as nx
-import torch, os, traceback
+import torch, os, traceback, json
 from time import time
 from sympy import sieve
 from numpy import random
@@ -112,7 +112,9 @@ def wl_transform(spadj, labels, cluster=False):
         pass
     return uniquetol(signatures, cluster=cluster)
 
-def random_walk(original_graph, structural_graph, node_list, output_dir_path,
+
+def random_walk(original_graph, structural_graph, node_list,
+                walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
                 walk_length, walk_time, prob, weight):
     original_graph_dict, structural_graph_dict = {}, {}
     # preprocessing
@@ -134,6 +136,8 @@ def random_walk(original_graph, structural_graph, node_list, output_dir_path,
     spmat_list += [sp.lil_matrix((node_num, node_num)) for i in range(walk_length)]
     node_count_list += [np.zeros(node_num, dtype=int).tolist() for i in range(walk_length)]
     all_count_list += np.zeros(walk_length, dtype=int).tolist()
+
+    walk_graph_dict = dict(zip(node_list, [{}] * node_num))
 
     # random walk
     for node in node_list:
@@ -157,16 +161,43 @@ def random_walk(original_graph, structural_graph, node_list, output_dir_path,
                 for j in range(i + 1, seq_len):
                     step = j - i
                     left_idx = nid2idx_dict[walk[i]]
-                    #print(j, walk[j])
                     right_idx = nid2idx_dict[walk[j]]
+                    # generate sparse node co-occurrence matrices
                     spmat = spmat_list[step]
                     node_count = node_count_list[step]
-
                     spmat[left_idx, right_idx] += 1
                     spmat[right_idx, left_idx] += 1
                     node_count[left_idx] += 1
                     node_count[right_idx] += 1
                     all_count_list[step] += 2
+                    # generate walk pairs
+                    walk_graph_dict[walk[i]][walk[j]] = 1
+                    walk_graph_dict[walk[j]][walk[i]] = 1
+
+    del original_graph_dict
+    del structural_graph_dict
+
+    for node, item_dict in walk_graph_dict.items():
+        walk_graph_dict[node] = list(item_dict.keys())
+    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.json')
+    with open(walk_file_path, 'w') as fp:
+        json.dump(walk_graph_dict, fp)
+    del walk_graph_dict
+
+    node_freq_arr = np.array(node_count_list[1])
+    for idx in range(2, walk_length + 1):
+        node_freq_arr += np.array(node_count_list[idx])
+    tot_freq = node_freq_arr.sum()
+
+    Z = 0.001
+    neg_node_list = []
+    for nidx in range(node_num):
+        neg_node_list += [node_list[nidx]] * int(((node_freq_arr[nidx] / tot_freq) ** 0.75) / Z)
+    walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
+    with open(walk_file_path, 'w') as fp:
+        json.dump(neg_node_list, fp)
+    del neg_node_list
+
     # calculate PPMI values
     for i in range(1, walk_length + 1):
         spmat = spmat_list[i].tocoo()
@@ -179,10 +210,9 @@ def random_walk(original_graph, structural_graph, node_list, output_dir_path,
             if res < 0:
                 return 0
             return res
-
         df_PPMI['data'] = df_PPMI.apply(calc_PPMI, axis=1)
         spmat = sp.coo_matrix((df_PPMI['data'], (df_PPMI['row'], df_PPMI['col'])), shape=(node_num, node_num))
-        sp.save_npz(os.path.join(output_dir_path, str(i) + ".npz"), spmat)
+        sp.save_npz(os.path.join(tensor_dir_path, str(i) + ".npz"), spmat)
 
 
 def separate(info='', sep='=', num=5):

@@ -2,7 +2,6 @@ import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 class GatedGraphConvolution(nn.Module):
     input_dim: int
     output_dim: int
@@ -57,7 +56,7 @@ class GatedGraphConvolution(nn.Module):
             trans += self.b2
         if self.b3 is not None:
             gate += self.b3
-        gate = F.sigmoid(gate)
+        gate = torch.sigmoid(gate)
         output = F.relu(output)
         return trans + gate * (output - trans)
 
@@ -129,9 +128,9 @@ class GCGRUCell(nn.Module):
         i_r, i_i, i_n = gate_x.chunk(3, 1)
         h_r, h_i, h_n = gate_h.chunk(3, 1)
 
-        resetgate = F.sigmoid(i_r + h_r)
-        inputgate = F.sigmoid(i_i + h_i)
-        newgate = F.tanh(i_n + (resetgate * h_n))
+        resetgate = torch.sigmoid(i_r + h_r)
+        inputgate = torch.sigmoid(i_i + h_i)
+        newgate = torch.tanh(i_n + (resetgate * h_n))
 
         hy = newgate + inputgate * (hidden - newgate)
         return hy
@@ -172,48 +171,11 @@ class GCLSTMCell(nn.Module):
         gates = gates.squeeze()
         ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
 
-        ingate = F.sigmoid(ingate)
-        forgetgate = F.sigmoid(forgetgate)
-        cellgate = F.tanh(cellgate)
-        outgate = F.sigmoid(outgate)
+        ingate = torch.sigmoid(ingate)
+        forgetgate = torch.sigmoid(forgetgate)
+        cellgate = torch.tanh(cellgate)
+        outgate = torch.sigmoid(outgate)
 
         cy = torch.mul(cx, forgetgate) + torch.mul(ingate, cellgate)
-        hy = torch.mul(outgate, F.tanh(cy))
+        hy = torch.mul(outgate, torch.tanh(cy))
         return hy, cy
-
-
-class Infomax(nn.Module):
-    input_dim: int
-    bias: int
-
-    def __init__(self, input_dim, bias=True):
-        super(Infomax, self).__init__()
-        self.input_dim = input_dim
-        self.bln = nn.Bilinear(self.input_dim, self.input_dim, 1, bias=bias)
-        for m in self.modules():
-            self.weights_init(m)
-
-    def weights_init(self, m):
-        if isinstance(m, nn.Bilinear):
-            torch.nn.init.xavier_uniform_(m.weight.data)
-            if m.bias is not None:
-                m.bias.data.fill_(0.0)
-
-    def forward(self, c, pos_hx, neg_hx):
-        c_x = torch.unsqueeze(c, 1)
-        c_x = c_x.expand_as(pos_hx)
-
-        pos_score = torch.squeeze(self.bln(pos_hx, c_x), 2)
-        neg_score = torch.squeeze(self.bln(neg_hx, c_x), 2)
-        return pos_score, neg_score
-
-
-# Applies an average on seq, of shape (batch, nodes, features)
-# While taking into account the masking of msk
-class Readout(nn.Module):
-    def __init__(self):
-        super(Readout, self).__init__()
-
-    def forward(self, seq):
-        res = torch.mean(seq, 1)
-        return F.sigmoid(res)

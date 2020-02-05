@@ -30,4 +30,4 @@ if __name__ == '__main__':
     processing = Processing(base_path="..\\..\\data\\email-eu", input_folder="1.format",
                             output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
                             hop=5, max_neighbor_num=100, walk_time=100, walk_length=5, prob=0.5)
-    processing.run(worker=2)
+    processing.run(worker=4)
