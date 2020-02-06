@@ -3,6 +3,8 @@ import pandas as pd
 import os, multiprocessing, time
 from numpy import random
 import scipy.sparse as sp
+import sys
+sys.path.append("..")
 from RWTGCN.utils import check_and_make_path, read_edgelist_from_dataframe
 
 class TensorGenerator:
@@ -28,29 +30,34 @@ class TensorGenerator:
         self.prob = prob
 
         check_and_make_path(self.output_base_path)
-        tem_dir = ['walk_tensor']
+        tem_dir = ['walk_pairs', 'node_freq', 'walk_tensor']
         for tem in tem_dir:
             check_and_make_path(os.path.join(self.output_base_path, tem))
 
     def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=True):
         print('f_name = ', f_name)
         f_folder = f_name.split('.')[0]
-        output_dir_path = os.path.join(self.output_base_path, 'walk_tensor', f_folder)
-        check_and_make_path(output_dir_path)
+        walk_dir_path = os.path.join(self.output_base_path, 'walk_pairs')
+        freq_dir_path = os.path.join(self.output_base_path, 'node_freq')
+        tensor_dir_path = os.path.join(self.output_base_path, 'walk_tensor', f_folder)
+        check_and_make_path(tensor_dir_path)
 
         original_graph = read_edgelist_from_dataframe(original_graph_path, self.full_node_list)
         structural_graph = read_edgelist_from_dataframe(structural_graph_path, self.full_node_list)
 
-        try:
-            import RWTGCN.preprocessing.helper as helper
-            return helper.random_walk(original_graph, structural_graph, self.full_node_list, output_dir_path,
-                   self.walk_length, self.walk_time, self.prob, weight)
-        except:
-            pass
-        import RWTGCN.utils as utils
-        return utils.random_walk(original_graph, structural_graph, self.full_node_list, output_dir_path,
-                           self.walk_length, self.walk_time, self.prob, weight)
-
+        t1 = time.time()
+        #try:
+        import RWTGCN.preprocessing.helper as helper
+        helper.random_walk(original_graph, structural_graph, self.full_node_list,
+                                      walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
+                                      self.walk_length, self.walk_time, self.prob, weight)
+        # except:
+        #     import RWTGCN.utils as utils
+        #     utils.random_walk(original_graph, structural_graph, self.full_node_list,
+        #                              walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
+        #                              self.walk_length, self.walk_time, self.prob, weight)
+        t2 = time.time()
+        print('random walk tot time', t2 - t1, ' seconds!')
     def generate_tensor_all_time(self, worker=-1):
         print("all file(s) in folder transform to tensor...")
         f_list = os.listdir(self.input_base_path)
@@ -59,13 +66,13 @@ class TensorGenerator:
             for i, f_name in enumerate(f_list):
                 original_graph_path = os.path.join(self.input_base_path, f_name)
                 structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
-                t1 = time.time()
+                #t1 = time.time()
                 self.generate_tensor(f_name, original_graph_path=original_graph_path,
                                      structural_graph_path=structural_graph_path)
-                t2 = time.time()
-                print('generate tensor time: ', t2 - t1, ' seconds!')
+                #t2 = time.time()
+                #print('generate tensor time: ', t2 - t1, ' seconds!')
         else:
-            worker = min(os.cpu_count(), self.walk_length, worker)
+            worker = min(os.cpu_count(), worker)
             pool = multiprocessing.Pool(processes=worker)
             print("\t\tstart " + str(worker) + " worker(s)")
             for i, f_name in enumerate(f_list):
@@ -74,7 +81,6 @@ class TensorGenerator:
                 pool.apply_async(self.generate_tensor, (f_name, original_graph_path, structural_graph_path))
             pool.close()
             pool.join()
-
 
 if __name__ == "__main__":
     tg = TensorGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
