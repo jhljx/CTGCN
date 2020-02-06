@@ -2,8 +2,9 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import os, multiprocessing, random
-from RWTGCN.utils import check_and_make_path, wl_transform, sigmoid
-
+import sys, time
+sys.path.append("..")
+from RWTGCN.utils import check_and_make_path, wl_transform
 
 class StructuralNetworkGenerator:
     base_path: str
@@ -72,53 +73,30 @@ class StructuralNetworkGenerator:
                               shape=(node_num, node_num))
         del df_origin
         labels = np.ones(node_num)
+        print('start wl transform!')
         new_labels, cluster_dict = wl_transform(spadj, labels, cluster=True)
-        df_colors = pd.DataFrame(new_labels, columns=[0])
+        cluster_len_dict = {}
+        for cluster_type, cluster_list in cluster_dict.items():
+            cluster_len_dict[cluster_type] = len(cluster_list)
+
+        color_arr = new_labels.reshape(-1, 1)
         for i in range(1, self.hop):
             new_labels = wl_transform(spadj, new_labels, cluster=False)
-            df_cur = pd.DataFrame(new_labels, columns=[i])
-            df_colors = pd.concat([df_colors, df_cur], axis=1)
-        df_colors['node'] = np.arange(node_num)
-
-        structural_edges_dict = dict()
-        def calc_structural_similarity(series):
-            from_idx = nid2idx_dict[series['from_id']]
-            to_idx = nid2idx_dict[series['to_id']]
-            if (series['from_id'], series['to_id']) in structural_edges_dict:
-                return
-            from_arr = df_colors.loc[from_idx].values
-            to_arr = df_colors.loc[to_idx].values
-            weight = sigmoid(from_arr.dot(to_arr))
-            key = (series['from_id'], series['to_id'])
-            structural_edges_dict[key] = weight
-
-        def get_structural_neigbors(series):
-            node_idx = series['node']
-            cluster_type = series[0]
-            cluster_list = cluster_dict[cluster_type].copy()
-            cluster_list.remove(node_idx)
-            cluster_num = len(cluster_list)
-            if cluster_num == 0:
-                return
-            cnt = random.randint(1, min(cluster_num, self.max_neighbor_num))
-            sampled_nodes = random.sample(cluster_list, cnt)
-            def map_func(val):
-                return idx2nid_dict[val]
-            sampled_nodes = list(map(map_func, sampled_nodes))
-            df_sim = pd.DataFrame(sampled_nodes, columns=['to_id'])
-            df_sim['from_id'] = idx2nid_dict[node_idx]
-            df_sim.apply(calc_structural_similarity, axis=1)
-            return
-        df_colors.apply(get_structural_neigbors, axis=1)
-        df_colors = df_colors.drop(['node'], axis=1)
-
-        edge_arr = np.array(list(structural_edges_dict.keys()))
-        weight_arr = np.array(list(structural_edges_dict.values())).reshape(-1, 1)
-        data_arr = np.hstack((edge_arr, weight_arr))
-        df_structural_edges = pd.DataFrame(data_arr, columns=['from_id', 'to_id', 'weight'])
-        print('edge num: ', df_structural_edges.shape[0])
-        df_structural_edges.to_csv(output_file, sep='\t', index=False, header=True, float_format='%.3f')
-        print('\t', str(file_num - i), ' finished')
+            color_arr = np.hstack((color_arr, new_labels.reshape(-1, 1)))
+        print('finish wl transform!')
+        print('start get structural neighbor!')
+        t1 = time.time()
+        try:
+            import RWTGCN.preprocessing.helper as helper
+            helper.get_structural_neighbors(color_arr, output_file, cluster_dict,
+                                            cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
+        except:
+            import RWTGCN.utils as utils
+            utils.get_structural_neighbors(color_arr, output_file, cluster_dict,
+                                           cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
+        t2 = time.time()
+        print('finish get structural neighbor!')
+        print('cost time: ', t2 - t1, ' seconds!')
 
 if __name__ == "__main__":
     s = StructuralNetworkGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
