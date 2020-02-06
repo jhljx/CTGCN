@@ -273,23 +273,6 @@ def separate(info='', sep='=', num=5):
     print()
 
 
-def time_filter_with_dict_param(func, **kwargs):
-    try:
-        t1 = time()
-        func(**kwargs)
-        t2 = time()
-        print(func.__name__, " spends ", t2 - t1, 'ms')
-    except Exception as e:
-        traceback.print_exc()
-
-
-def time_filter_with_tuple_param(func, *args):
-    t1 = time()
-    func(*args)
-    t2 = time()
-    print(func.__name__, " spends ", t2 - t1, 'ms')
-
-
 if __name__ == '__main__':
     A = np.array([[0, 1, 1, 1, 1],
                   [1, 0, 1, 0, 0],

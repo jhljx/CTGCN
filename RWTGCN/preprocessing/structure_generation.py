@@ -93,6 +93,7 @@ class StructuralNetworkGenerator:
                                             cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
         except:
             import RWTGCN.utils as utils
+            print('use util get structural neighbors!')
             utils.get_structural_neighbors(color_arr, output_file, cluster_dict,
                                                cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
         t2 = time.time()

@@ -4,6 +4,7 @@ import os, time, json
 import torch
 import torch.nn as nn
 from torch import optim
+import networkx as nx
 from torch.autograd import Variable
 from RWTGCN.layers import GCGRUCell, GCLSTMCell
 from RWTGCN.metrics import MainLoss
@@ -135,7 +136,11 @@ class DynamicEmbedding:
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
-                node_pair_list.append(json.load(fp))
+                edge_list = json.load(fp)
+                graph = nx.Graph()
+                graph.add_edges_from(edge_list)
+                # convert graph to dict {node: neighbor_list}
+                node_pair_list.append(nx.to_dict_of_lists(graph))
         return node_pair_list
 
     def get_neg_freq_list(self, start_idx):
