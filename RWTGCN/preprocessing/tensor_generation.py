@@ -7,6 +7,7 @@ import sys
 sys.path.append("..")
 from RWTGCN.utils import check_and_make_path, read_edgelist_from_dataframe
 
+
 class TensorGenerator:
     base_path: str
     input_base_path: str
@@ -46,18 +47,20 @@ class TensorGenerator:
         structural_graph = read_edgelist_from_dataframe(structural_graph_path, self.full_node_list)
 
         t1 = time.time()
-        #try:
-        import RWTGCN.preprocessing.helper as helper
-        helper.random_walk(original_graph, structural_graph, self.full_node_list,
-                                      walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
-                                      self.walk_length, self.walk_time, self.prob, weight)
-        # except:
-        #     import RWTGCN.utils as utils
-        #     utils.random_walk(original_graph, structural_graph, self.full_node_list,
-        #                              walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
-        #                              self.walk_length, self.walk_time, self.prob, weight)
+        try:
+            import RWTGCN.preprocessing.helper as helper
+            helper.random_walk(original_graph, structural_graph, self.full_node_list,
+                               walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
+                               self.walk_length, self.walk_time, self.prob, weight)
+        except:
+            import RWTGCN.utils as utils
+            print('use util random walk!')
+            utils.random_walk(original_graph, structural_graph, self.full_node_list,
+                              walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
+                              self.walk_length, self.walk_time, self.prob, weight)
         t2 = time.time()
         print('random walk tot time', t2 - t1, ' seconds!')
+
     def generate_tensor_all_time(self, worker=-1):
         print("all file(s) in folder transform to tensor...")
         f_list = os.listdir(self.input_base_path)
@@ -66,7 +69,7 @@ class TensorGenerator:
             for i, f_name in enumerate(f_list):
                 original_graph_path = os.path.join(self.input_base_path, f_name)
                 structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
-                #t1 = time.time()
+                # t1 = time.time()
                 self.generate_tensor(f_name, original_graph_path=original_graph_path,
                                      structural_graph_path=structural_graph_path)
                 #t2 = time.time()

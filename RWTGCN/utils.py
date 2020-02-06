@@ -111,12 +111,11 @@ def wl_transform(spadj, labels, cluster=False):
 def random_walk(original_graph, structural_graph, node_list,
                 walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
                 walk_length, walk_time, prob, weight):
-    # t1 = time.time()
+
     original_graph_dict, structural_graph_dict = {}, {}
     # preprocessing
     for node in node_list:
         original_neighbors = list(original_graph.neighbors(node))
-        # cdef int neighbor_size = len(original_neighbors)
         original_weight = np.array([original_graph[node][neighbor]['weight'] for neighbor in original_neighbors])
         original_graph_dict[node] = {'neighbor': original_neighbors}
         original_graph_dict[node]['weight'] = original_weight / original_weight.sum()
@@ -125,27 +124,26 @@ def random_walk(original_graph, structural_graph, node_list,
         structural_weight = np.array([structural_graph[node][neighbor]['weight'] for neighbor in structural_neighbors])
         structural_graph_dict[node] = {'neighbor': structural_neighbors}
         structural_graph_dict[node]['weight'] = structural_weight / structural_weight.sum()
-    # t2 =time.time()
-    # print('build graph time: ', t2 - t1, ' seconds!')
 
     node_num = len(node_list)
+    node2idx_dict = dict(zip(node_list, np.arange(node_num).tolist()))
     step_adj_list, node_count_list, all_count_list = [{}], [[]], [-1]
-    step_adj_list += [{} for i in range(walk_length)]
-    node_count_list += [{} for i in range(walk_length)]
-    all_count_list += np.zeros(walk_length, dtype=int).tolist()
-    walk_graph_dict = dict(zip(node_list, [{}] * node_num))
 
-    t1 = time.time()
-    print('start random walk!')
+    num = node_num
+    maxnum = walk_length + 1
+    for i in range(1, maxnum):
+        step_adj_list.append({})
+        node_count_list.append({})
+        all_count_list.append(0)
+
     # random walk
-    for nidx in range(node_num):
+    for nidx in range(num):
         for iter in range(walk_time):
-            # print('nidx = ', nidx)
             start_node = node_list[nidx]
             eps = 1e-8
             walk = [start_node]
             cnt = 1
-            while cnt < walk_length + 1:
+            while cnt < maxnum:
                 cur = walk[-1]
                 rd = np.random.random()
                 if rd <= prob + eps:
@@ -174,56 +172,60 @@ def random_walk(original_graph, structural_graph, node_list,
                     node_count[walk[i]] = 1 if walk[i] not in node_count else node_count[walk[i]] + 1
                     node_count[walk[j]] = 1 if walk[j] not in node_count else node_count[walk[j]] + 1
                     all_count_list[step] += 2
-                    # generate walk pairs
-                    walk_graph_dict[walk[i]][walk[j]] = 1
-                    walk_graph_dict[walk[j]][walk[i]] = 1
-    t2 = time.time()
-    print('random walk time: ', t2 - t1, ' seconds!')
     del original_graph_dict
     del structural_graph_dict
 
-    for node, item_dict in walk_graph_dict.items():
-        walk_graph_dict[node] = list(item_dict.keys())
-    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.json')
-    with open(walk_file_path, 'w') as fp:
-        json.dump(walk_graph_dict, fp)
-    del walk_graph_dict
-    t3 = time.time()
-    print('walk pair time: ', t3 - t2, ' seconds!')
-
-    node_freq_arr = np.array(node_count_list[1])
-    for idx in range(2, walk_length + 1):
-        node_freq_arr += np.array(node_count_list[idx])
+    node_freq_arr = np.zeros(num, dtype=int)
+    for nidx in range(num):
+        for idx in range(1, maxnum):
+            node_dict = node_count_list[idx]
+            if node_list[nidx] in node_dict:
+                node_freq_arr[nidx] += node_dict[node_list[nidx]]
     tot_freq = node_freq_arr.sum()
-    Z = 0.001
+    Z = 0.00001
     neg_node_list = []
-    for nidx in range(node_num):
-        neg_node_list += [node_list[nidx]] * int(((node_freq_arr[nidx] / tot_freq) ** 0.75) / Z)
+    calc_res = 0
+    for nidx in range(num):
+        rep_num = int(((node_freq_arr[nidx] / tot_freq) ** 0.75) / Z)
+        if rep_num > 10:
+            calc_res += 1
+        neg_node_list += [node_list[nidx]] * rep_num
     walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
     with open(walk_file_path, 'w') as fp:
         json.dump(neg_node_list, fp)
     del neg_node_list
-    t4 = time.time()
-    print('node freq time: ', t4 - t3, ' seconds!')
+    del node_freq_arr
 
-    for idx in range(1, walk_length + 1):
+    def trans(node):
+        return node2idx_dict[node]
+
+    trans_func = np.vectorize(trans)
+
+    edge_set = set()
+    for idx in range(1, maxnum):
         edge_dict = step_adj_list[idx]
         node_count = node_count_list[idx]
         all_count = all_count_list[idx]
+        edge_set |= set(edge_dict.keys())
 
-        for edge, cnt in edge_dict:
+        for edge, cnt in edge_dict.items():
             from_node = edge[0]
             to_node = edge[1]
             res = np.log(cnt * all_count / (node_count[from_node] * node_count[to_node]))
             edge_dict[edge] = res if res > 0 else res
 
-        edge_arr = np.array(list(edge_dict.keys()))
+        edge_arr = trans_func(np.array(list(edge_dict.keys())))
         weight_arr = np.array(list(edge_dict.values()))
         spmat = sp.coo_matrix((weight_arr, (edge_arr[:, 0], edge_arr[:, 1])), shape=(node_num, node_num))
         sp.save_npz(os.path.join(tensor_dir_path, str(idx) + ".npz"), spmat)
-    print('finish calc PPMI and save files!')
-    t5 = time.time()
-    print('PPMI calculation time: ', t5 - t4, ' seconds!')
+
+    del step_adj_list
+    del node_count_list
+    del all_count_list
+    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.json')
+    edge_list = list(edge_set)
+    with open(walk_file_path, 'w') as fp:
+        json.dump(edge_list, fp)
 
 def sigmoid(x):
     s = 1 / (1 + np.exp(-x))

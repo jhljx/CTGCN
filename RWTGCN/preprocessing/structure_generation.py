@@ -85,7 +85,7 @@ class StructuralNetworkGenerator:
             color_arr = np.hstack((color_arr, new_labels.reshape(-1, 1)))
         print('finish wl transform!')
         print('start get structural neighbor!')
-        print('node num = ', color_arr.shape[0])
+        # print('node num = ', color_arr.shape[0])
         t1 = time.time()
         try:
             import RWTGCN.preprocessing.helper as helper
