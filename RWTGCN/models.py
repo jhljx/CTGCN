@@ -1,16 +1,17 @@
+import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-import os, time, json, sys
+import os, time, json, sys, random
 import torch
 import torch.nn as nn
 from torch import optim
+from torch.utils.data import Dataset
 import networkx as nx
 from torch.autograd import Variable
 sys.path.append("..")
 from RWTGCN.layers import GCGRUCell, GCLSTMCell
 from RWTGCN.metrics import MainLoss
 from RWTGCN.utils import check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor
-
 
 class RWTGCN(nn.Module):
     input_dim: int
@@ -103,7 +104,7 @@ class DynamicEmbedding:
 
         self.model = RWTGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, duration=self.duration,
                             unit_type=unit_type, bias=bias)
-        self.loss = MainLoss(self.full_node_list, neg_num=neg_num, Q=Q)
+        self.loss = MainLoss(neg_num=neg_num, Q=Q)
 
         check_and_make_path(self.embedding_base_path)
         check_and_make_path(self.model_base_path)
@@ -165,8 +166,7 @@ class DynamicEmbedding:
     #     for param_group in optimizer.param_groups:
     #         param_group['lr'] = lr
 
-    def learn_embedding(self, epoch=50, lr=1e-3, start_idx=0, weight_decay=0., export=True):
-        print('learn embedding!')
+    def learn_embedding(self, epoch=50, batch_size=1024, lr=1e-3, start_idx=0, weight_decay=0., export=True):
         adj_list = self.get_date_adj_list(start_idx)
         print('get adj list finish!')
         node_pair_list = self.get_node_pair_list(start_idx)
@@ -189,23 +189,30 @@ class DynamicEmbedding:
         # 创建优化器（optimizer）
         # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.8, weight_decay=weight_decay)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-        train_loss = []
+        # train_loss = []
 
         embedding_list = []
+        batch_num = self.node_num // batch_size
+        if self.node_num % batch_size != 0:
+            batch_num += 1
+        # node_list = self.full_node_list.copy()
 
         for i in range(epoch):
-            ## 1. forward propagation
-            embedding_list = model(x_list, adj_list)
-            print('finish forward!')
-            ## 2. loss calculation
-            loss = self.loss(embedding_list)
-            optimizer.zero_grad()  # 清零梯度缓存
-            ## 3. backward propagation
-            loss.backward()
-            ## 4. weight optimization
-            optimizer.step()  # 更新参数
-            train_loss.append(loss.item())
-            print("epoch", i + 1, "loss:", loss)
+            node_list = np.random.permutation(self.full_node_list)
+            for j in range(batch_num):
+                ## 1. forward propagation
+                embedding_list = model(x_list, adj_list)
+                # print('finish forward!')
+                batch_nodes = node_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
+                ## 2. loss calculation
+                loss = self.loss(embedding_list, batch_nodes)
+                ## 3. backward propagation
+                loss.backward()
+                ## 4. weight optimization
+                optimizer.step()  # 更新参数
+                optimizer.zero_grad()  # 清零梯度缓存
+                # train_loss.append(loss.item())
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss)
 
         if export:
             for i in range(len(embedding_list)):

@@ -164,12 +164,12 @@ def random_walk(original_graph, structural_graph, node_list,
                     edge_dict = step_adj_list[step]
                     node_count = node_count_list[step]
                     key = (walk[i], walk[j])
-                    edge_dict[key] = 1 if key not in edge_dict else edge_dict[key] + 1
+                    edge_dict[key] = edge_dict.get(key, 0) + 1
                     key = (walk[j], walk[i])
-                    edge_dict[key] = 1 if key not in edge_dict else edge_dict[key] + 1
+                    edge_dict[key] = edge_dict.get(key, 0) + 1
 
-                    node_count[walk[i]] = 1 if walk[i] not in node_count else node_count[walk[i]] + 1
-                    node_count[walk[j]] = 1 if walk[j] not in node_count else node_count[walk[j]] + 1
+                    node_count[walk[i]] = node_count.get(walk[i], 0) + 1
+                    node_count[walk[j]] = node_count.get(walk[j], 0) + 1
                     all_count_list[step] += 2
     del original_graph_dict
     del structural_graph_dict
@@ -185,7 +185,7 @@ def random_walk(original_graph, structural_graph, node_list,
     neg_node_list = []
     for nidx in range(num):
         rep_num = int(((node_freq_arr[nidx] / tot_freq) ** 0.75) / Z)
-        neg_node_list += [node_list[nidx]] * rep_num
+        neg_node_list += [nidx] * rep_num
     walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
     with open(walk_file_path, 'w') as fp:
         json.dump(neg_node_list, fp)
