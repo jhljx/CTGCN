@@ -10,7 +10,6 @@ def check_and_make_path(to_make):
     if not os.path.exists(to_make):
         os.makedirs(to_make)
 
-
 def read_edgelist_from_dataframe(filename, full_node_list):
     df = pd.read_csv(filename, sep='\t')
     # dataframe['weight'] = 1.0
@@ -184,11 +183,8 @@ def random_walk(original_graph, structural_graph, node_list,
     tot_freq = node_freq_arr.sum()
     Z = 0.00001
     neg_node_list = []
-    calc_res = 0
     for nidx in range(num):
         rep_num = int(((node_freq_arr[nidx] / tot_freq) ** 0.75) / Z)
-        if rep_num > 10:
-            calc_res += 1
         neg_node_list += [node_list[nidx]] * rep_num
     walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
     with open(walk_file_path, 'w') as fp:

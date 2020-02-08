@@ -41,10 +41,6 @@ class MainLoss(nn.Module):
             for nid, node in enumerate(self.full_node_list):
                 # print('nid = ', nid)
                 pos_idxs = node_pair_dict[node]
-                # try:
-                #     import RWTGCN.preprocessing.helper as helper
-                #     neg_idxs = helper.get_neg_samples(nid, pos_idxs, nid_list, self.neg_sample_num)
-                # except:
                 neg_idxs = random.sample(node_freq, self.neg_sample_num)
                 node_idxs = [nid] * len(node_pair_dict[node])
                 pos_score = F.cosine_similarity(embedding_mat[node_idxs], embedding_mat[pos_idxs])
