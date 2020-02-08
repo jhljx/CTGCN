@@ -76,13 +76,15 @@ def random_walk(original_graph, structural_graph, node_list, walk_dir_path, freq
                     # generate sparse node co-occurrence matrices
                     edge_dict = step_adj_list[step]
                     node_count = node_count_list[step]
+                    if walk[i] == walk[j]:
+                        continue
                     key = (walk[i], walk[j])
-                    edge_dict[key] = 1 if key not in edge_dict else edge_dict[key] + 1
+                    edge_dict[key] = edge_dict.get(key, 0) + 1
                     key = (walk[j], walk[i])
-                    edge_dict[key] = 1 if key not in edge_dict else edge_dict[key] + 1
+                    edge_dict[key] = edge_dict.get(key, 0) + 1
 
-                    node_count[walk[i]] = 1 if walk[i] not in node_count else node_count[walk[i]] + 1
-                    node_count[walk[j]] = 1 if walk[j] not in node_count else node_count[walk[j]] + 1
+                    node_count[walk[i]] = node_count.get(walk[i], 0) + 1
+                    node_count[walk[j]] = node_count.get(walk[j], 0) + 1
                     all_count_list[step] += 2
                     # generate walk pairs
                     # walk_graph_dict[walk[i]][walk[j]] = 1
@@ -109,12 +111,9 @@ def random_walk(original_graph, structural_graph, node_list, walk_dir_path, freq
     tot_freq = node_freq_arr.sum()
     Z = 0.00001
     neg_node_list = []
-    calc_res = 0
     for nidx in range(num):
         rep_num = int(((node_freq_arr[nidx]/tot_freq)**0.75)/ Z)
-        if rep_num > 10:
-            calc_res += 1
-        neg_node_list += [node_list[nidx]] * rep_num
+        neg_node_list += [nidx] * rep_num
         # print('nidx = ', nidx, ', rep_num = ', rep_num)
     #print('node freq len: ', len(neg_node_list), ', >10 node cnt: ', calc_res)
     walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')

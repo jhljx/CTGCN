@@ -7,15 +7,12 @@ import random
 class MainLoss(nn.Module):
     node_pair_list: list
     node_freq_list: list
-    full_node_list: list
+    node2idx_dict: dict
     node_num: int
     neg_sample_num: int
 
-    def __init__(self, node_list, neg_num=20, Q=10):
+    def __init__(self, neg_num=20, Q=10):
         super(MainLoss, self).__init__()
-
-        self.full_node_list = node_list
-        self.node_num = len(node_list)
         self.neg_sample_num = neg_num
         self.Q = Q
 
@@ -27,39 +24,30 @@ class MainLoss(nn.Module):
             for node in self.full_node_list:
                 node_pair_dict = self.node_pair_list[i]
                 node_pair_dict[node] = [self.node2idx_dict[neighbor] for neighbor in node_pair_dict[node]]
-            self.neg_freq_list[i] = [self.node2idx_dict[node] for node in self.node_pair_list[i]]
 
-    def forward(self, embedding_list):
+    def forward(self, embedding_list, batch_nodes):
         timestamp_num = len(embedding_list)
         assert timestamp_num == len(self.node_pair_list)
-        main_loss = 0
+        bce_loss = nn.BCEWithLogitsLoss()
+        loss_val_sum = torch.tensor([0])
         for i in range(timestamp_num):
             embedding_mat = embedding_list[i]
             node_pair_dict = self.node_pair_list[i]
             node_freq = self.neg_freq_list[i]
-            node_loss_list = []
-            for nid, node in enumerate(self.full_node_list):
-                # print('nid = ', nid)
-                pos_idxs = node_pair_dict[node]
-                # try:
-                #     import RWTGCN.preprocessing.helper as helper
-                #     neg_idxs = helper.get_neg_samples(nid, pos_idxs, nid_list, self.neg_sample_num)
-                # except:
-                neg_idxs = random.sample(node_freq, self.neg_sample_num)
-                node_idxs = [nid] * len(node_pair_dict[node])
-                pos_score = F.cosine_similarity(embedding_mat[node_idxs], embedding_mat[pos_idxs])
-                pos_score = torch.mean(torch.log(torch.sigmoid(pos_score)))
-                # print(pos_score.shape)
+            node_idxs1, pos_idxs, node_idxs2, neg_idxs  = [], [], [], []
 
-                node_idxs = [nid] * len(neg_idxs)
-                neg_score = F.cosine_similarity(embedding_mat[node_idxs], embedding_mat[neg_idxs])
-                neg_score = self.Q * torch.mean(torch.log(1.0 - torch.sigmoid(neg_score)))
-                # print(neg_score.shape)
-                node_loss_list.append((-pos_score - neg_score).view(1,-1))
-            if main_loss == 0:
-                # print(node_loss_list)
-                main_loss = torch.mean(torch.cat(node_loss_list, 0))
-                # print(main_loss)
-            else:
-                main_loss += torch.mean(torch.cat(node_loss_list))
-        return main_loss / timestamp_num
+            for node in batch_nodes:
+                # print('nid = ', nid)
+                nid = self.node2idx_dict[node]
+                pos_idxs += node_pair_dict[node]
+                node_idxs1 += [nid] * len(node_pair_dict[node])
+                neg_idxs += random.sample(node_freq, self.neg_sample_num)
+                node_idxs2 += [nid] * len(node_pair_dict[node])
+
+            pos_score = torch.sum(embedding_mat[node_idxs1].multiply(embedding_mat[pos_idxs]), dim=1)
+            neg_score = -1.0 * torch.sum(embedding_mat[node_idxs1].multiply(embedding_mat[pos_idxs]), dim=1)
+
+            loss_val = torch.mean(bce_loss(pos_score, torch.ones_like(pos_score))) + \
+                       self.Q * torch.mean(bce_loss(neg_score, torch.zeros_like(neg_score)))
+            loss_val_sum += loss_val
+        return loss_val_sum
