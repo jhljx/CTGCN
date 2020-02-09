@@ -115,19 +115,32 @@ class DynamicEmbedding:
         assert start_idx < time_stamp_num
 
         date_adj_list = []
+        node_pair_list = []
+        node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
 
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             date_dir_path = os.path.join(self.tensor_base_path, date_dir_list[i])
             f_list = os.listdir(date_dir_path)
             adj_list = []
-
+            edge_set = set()
             for i, f_name in enumerate(f_list):
                 # print("\t\t" + str(walk_length - i) + "file(s) left")
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
+                rows, cols = spmat.nonzero()
+                edge_set |= set(list(zip(rows, cols)))
                 sptensor = get_normalize_PPMI_adj(spmat)
                 adj_list.append(sptensor)
             date_adj_list.append(adj_list)
-        return date_adj_list
+
+            neighbor_dict = dict()
+            edge_list = list(edge_set)
+            for edge in edge_list:
+                if edge[0] not in neighbor_dict:
+                    neighbor_dict[edge[0]] = [node2idx_dict[edge[1]]]
+                else:
+                    neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
+            node_pair_list.append(neighbor_dict)
+        return date_adj_list, node_pair_list
 
     def get_node_pair_list(self, start_idx):
         walk_file_list = sorted(os.listdir(self.walk_base_path))
@@ -185,7 +198,7 @@ class DynamicEmbedding:
 
     def learn_embedding(self, epoch=50, batch_size=1024, lr=1e-3, start_idx=0, weight_decay=0., export=True):
         t1 = time.time()
-        adj_list = self.get_date_adj_list(start_idx)
+        adj_list, node_pair_list = self.get_date_adj_list(start_idx)
         t2 = time.time()
         print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
         node_pair_list, node2idx_dict = self.get_node_pair_list(start_idx)
