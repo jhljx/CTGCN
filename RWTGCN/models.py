@@ -1,13 +1,14 @@
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-import os, time, json, random
+import os, time, json, sys, random
 import torch
 import torch.nn as nn
 from torch import optim
 from torch.utils.data import Dataset
 import networkx as nx
 from torch.autograd import Variable
+sys.path.append("..")
 from RWTGCN.layers import GCGRUCell, GCLSTMCell
 from RWTGCN.metrics import MainLoss
 from RWTGCN.utils import check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor
@@ -138,7 +139,10 @@ class DynamicEmbedding:
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
+                t1 = time.time()
                 edge_list = json.load(fp)
+                t2 = time.time()
+                print('read file time: ', t2 - t1, ' seconds!')
                 neighbor_dict = dict()
                 for edge in edge_list:
                     if edge[0] not in neighbor_dict:
@@ -146,11 +150,18 @@ class DynamicEmbedding:
                     else:
                         neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
                 node_pair_list.append(neighbor_dict)
-                #graph = nx.Graph()
-                #graph.add_edges_from(edge_list)
-                # convert graph to dict {node: neighbor_list}
-                #node_pair_list.append(nx.to_dict_of_lists(graph))
-        return node_pair_list
+                t3 = time.time()
+                print('transform time: ', t3 - t2, ' seconds!')
+                # graph = nx.Graph()
+                # graph.add_edges_from(edge_list)
+                # t3 = time.time()
+                # print('add edges time: ', t3 - t2, ' seconds!')
+                # # convert graph to dict {node: neighbor_list}
+                # node_pair_list.append(nx.to_dict_of_lists(graph))
+                # t4 = time.time()
+                # print('to list time: ', t4 - t3, ' seconds!')
+                # del graph
+        return node_pair_list, node2idx_dict
 
     def get_neg_freq_list(self, start_idx):
         freq_file_list = sorted(os.listdir(self.freq_base_path))
@@ -173,13 +184,19 @@ class DynamicEmbedding:
     #         param_group['lr'] = lr
 
     def learn_embedding(self, epoch=50, batch_size=1024, lr=1e-3, start_idx=0, weight_decay=0., export=True):
-
+        t1 = time.time()
         adj_list = self.get_date_adj_list(start_idx)
-        node_pair_list = self.get_node_pair_list(start_idx)
+        t2 = time.time()
+        print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
+        node_pair_list, node2idx_dict = self.get_node_pair_list(start_idx)
+        t3 = time.time()
+        print('get node pair list finish! cost time: ', t3 - t2, ' seconds!')
         neg_freq_list = self.get_neg_freq_list(start_idx)
-
-        self.loss.set_node_info(node_pair_list, neg_freq_list)
-
+        t4 = time.time()
+        print('get neg freq list finish! cost time: ', t4 - t3, ' seconds!')
+        self.loss.set_node_info(node_pair_list, neg_freq_list, node2idx_dict)
+        t5 = time.time()
+        print("prepare finish! cost time: ", t5 - t4, ' seconds!')
         time_stamp_num = len(adj_list)
         # print('time stamp num: ', time_stamp_num)
         x_list = [sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num)) for i in range(time_stamp_num)]
@@ -206,18 +223,26 @@ class DynamicEmbedding:
             node_list = np.random.permutation(self.full_node_list)
             for j in range(batch_num):
                 ## 1. forward propagation
+                t1 = time.time()
                 embedding_list = model(x_list, adj_list)
+                t2 = time.time()
+                print('forward time: ', t2 - t1, ' seconds!')
                 # print('finish forward!')
                 batch_nodes = node_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
                 ## 2. loss calculation
                 loss = self.loss(embedding_list, batch_nodes)
+                t3 = time.time()
+                print('loss calc time: ', t3 - t2, ' seconds!')
                 ## 3. backward propagation
                 loss.backward()
+                t4 = time.time()
+                print('backward time: ', t4 - t3, ' seconds!')
                 ## 4. weight optimization
                 optimizer.step()  # 更新参数
                 optimizer.zero_grad()  # 清零梯度缓存
                 # train_loss.append(loss.item())
-                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss)
+                t5 = time.time()
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss, ', cost time: ', t5 - t1, ' seconds!')
 
         if export:
             for i in range(len(embedding_list)):
@@ -232,9 +257,16 @@ class DynamicEmbedding:
         return embedding_list
 
 if __name__ == '__main__':
-    dyEmbedding = DynamicEmbedding(base_path="..\\data\\email-eu\\RWT-GCN", walk_folder='walk_pairs',
-                                   freq_folder='node_freq',  tensor_folder="walk_tensor",
-                                   embedding_folder="embedding", node_file="..\\nodes_set\\nodes.csv",
+    thread_num = os.cpu_count() - 4
+    torch.set_num_threads(thread_num)
+    dyEmbedding = DynamicEmbedding(base_path="../../data/facebook/RWT-GCN", walk_folder='walk_pairs',
+                                   freq_folder='node_freq', tensor_folder="walk_tensor",
+                                   embedding_folder="embedding", node_file="../nodes_set/nodes.csv",
                                    output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
                                    unit_type='GRU', bias=True)
+    # dyEmbedding = DynamicEmbedding(base_path="..\\data\\email-eu\\RWT-GCN", walk_folder='walk_pairs',
+    #                                freq_folder='node_freq',  tensor_folder="walk_tensor",
+    #                                embedding_folder="embedding", node_file="..\\nodes_set\\nodes.csv",
+    #                                output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
+    #                                unit_type='GRU', bias=True)
     dyEmbedding.learn_embedding(epoch=50, lr=0.01, start_idx=0, weight_decay=0.0005, export=True)

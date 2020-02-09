@@ -115,7 +115,7 @@ def random_walk(original_graph, structural_graph, node_list, walk_dir_path, freq
         rep_num = int(((node_freq_arr[nidx]/tot_freq)**0.75)/ Z)
         neg_node_list += [nidx] * rep_num
         # print('nidx = ', nidx, ', rep_num = ', rep_num)
-    #print('node freq len: ', len(neg_node_list), ', >10 node cnt: ', calc_res)
+    #print('node freq len: ', len(neg_node_list))
     walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
     with open(walk_file_path, 'w') as fp:
         json.dump(neg_node_list, fp)
