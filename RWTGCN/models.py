@@ -134,14 +134,22 @@ class DynamicEmbedding:
         assert start_idx < time_stamp_num
 
         node_pair_list = []
+        node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
                 edge_list = json.load(fp)
-                graph = nx.Graph()
-                graph.add_edges_from(edge_list)
+                neighbor_dict = dict()
+                for edge in edge_list:
+                    if edge[0] not in neighbor_dict:
+                        neighbor_dict[edge[0]] = [node2idx_dict[edge[1]]]
+                    else:
+                        neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
+                node_pair_list.append(neighbor_dict)
+                #graph = nx.Graph()
+                #graph.add_edges_from(edge_list)
                 # convert graph to dict {node: neighbor_list}
-                node_pair_list.append(nx.to_dict_of_lists(graph))
+                #node_pair_list.append(nx.to_dict_of_lists(graph))
         return node_pair_list
 
     def get_neg_freq_list(self, start_idx):
