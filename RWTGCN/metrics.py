@@ -41,8 +41,13 @@ class MainLoss(nn.Module):
             for node in batch_nodes:
                 # print('nid = ', nid)
                 nid = self.node2idx_dict[node]
-                pos_idxs += node_pair_dict[node]
-                node_idxs1 += [nid] * len(node_pair_dict[node])
+                neighbor_num = len(node_pair_dict[node])
+                if neighbor_num <= self.neg_sample_num:
+                    pos_idxs += node_pair_dict[node]
+                    node_idxs1 += [nid] * len(node_pair_dict[node])
+                else:
+                    pos_idxs += random.sample(node_pair_dict[node], self.neg_sample_num)
+                    node_idxs1 += [nid] * self.neg_sample_num
                 neg_idxs += random.sample(node_freq, self.neg_sample_num)
                 node_idxs2 += [nid] * len(node_pair_dict[node])
 
