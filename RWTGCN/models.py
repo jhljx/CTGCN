@@ -138,11 +138,18 @@ class DynamicEmbedding:
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
+                t1 = time.time()
                 edge_list = json.load(fp)
+                t2 = time.time()
+                print('read file time: ', t2 - t1, ' seconds!')
                 graph = nx.Graph()
                 graph.add_edges_from(edge_list)
+                t3 = time.time()
+                print('add edges time: ', t3 - t2, ' seconds!')
                 # convert graph to dict {node: neighbor_list}
                 node_pair_list.append(nx.to_dict_of_lists(graph))
+                t4 = time.time()
+                print('to list time: ', t4 - t3, ' seconds!')
                 del graph
         return node_pair_list
 
@@ -167,14 +174,19 @@ class DynamicEmbedding:
     #         param_group['lr'] = lr
 
     def learn_embedding(self, epoch=50, batch_size=1024, lr=1e-3, start_idx=0, weight_decay=0., export=True):
+        t1 = time.time()
         adj_list = self.get_date_adj_list(start_idx)
-        print('get adj list finish!')
+        t2 = time.time()
+        print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
         node_pair_list = self.get_node_pair_list(start_idx)
-        print('get node pair list finish!')
+        t3 = time.time()
+        print('get node pair list finish! cost time: ', t3 - t2, ' seconds!')
         neg_freq_list = self.get_neg_freq_list(start_idx)
-        print('get neg freq list finish!')
+        t4 = time.time()
+        print('get neg freq list finish! cost time: ', t4 - t3, ' seconds!')
         self.loss.set_node_info(node_pair_list, neg_freq_list)
-        print("prepare finish!")
+        t5 = time.time()
+        print("prepare finish! cost time: ", t5 - t4, ' seconds!')
         time_stamp_num = len(adj_list)
         # print('time stamp num: ', time_stamp_num)
         x_list = [sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num)) for i in range(time_stamp_num)]
@@ -201,18 +213,26 @@ class DynamicEmbedding:
             node_list = np.random.permutation(self.full_node_list)
             for j in range(batch_num):
                 ## 1. forward propagation
+                t1 = time.time()
                 embedding_list = model(x_list, adj_list)
+                t2 = time.time()
+                print('forward time: ', t2 - t1, ' seconds!')
                 # print('finish forward!')
                 batch_nodes = node_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
                 ## 2. loss calculation
                 loss = self.loss(embedding_list, batch_nodes)
+                t3 = time.time()
+                print('loss calc time: ', t3 - t2, ' seconds!')
                 ## 3. backward propagation
                 loss.backward()
+                t4 = time.time()
+                print('backward time: ', t4 - t3, ' seconds!')
                 ## 4. weight optimization
                 optimizer.step()  # 更新参数
                 optimizer.zero_grad()  # 清零梯度缓存
                 # train_loss.append(loss.item())
-                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss)
+                t5 = time.time()
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss, ', cost time: ', t5 - t1, ' seconds!')
 
         if export:
             for i in range(len(embedding_list)):
