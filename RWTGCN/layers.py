@@ -85,6 +85,7 @@ class GatedGCN(nn.Module):
         self.gc_list.append(GatedGraphConvolution(input_dim, output_dim, bias=bias))
         for i in range(1, layer_num):
             self.gc_list.append(GatedGraphConvolution(output_dim, output_dim, bias=bias))
+        self.gc_list = nn.ModuleList(self.gc_list)
 
     def forward(self, x, adj_list):
         assert self.layer_num == len(adj_list)
