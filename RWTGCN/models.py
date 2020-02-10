@@ -16,6 +16,7 @@ class RWTGCN(nn.Module):
     dropout: float
     unit_type: str
     duration: int
+    layer_num: int
     bias: bool
 
     def __init__(self, input_dim, output_dim, layer_num, dropout, duration, unit_type='GRU', bias=True):
@@ -25,6 +26,7 @@ class RWTGCN(nn.Module):
         self.dropout = dropout
         self.unit_type = unit_type
         self.duration = duration
+        self.layer_num = layer_num
         self.bias = bias
         if self.unit_type == 'GRU':
             self.rnn_cell = GCGRUCell(input_dim, output_dim, layer_num, dropout, bias=bias)
@@ -34,16 +36,25 @@ class RWTGCN(nn.Module):
             raise AttributeError('unit type error!')
 
     def forward(self, x_list, adj_list):
-        assert len(x_list) == self.duration and len(adj_list) == self.duration
-        # print(x_list[0].dim)
         if torch.cuda.is_available():
-            h0 = Variable(torch.zeros(x_list[0].shape[1], self.output_dim).cuda())
+            assert len(x_list) == self.duration and len(adj_list) == self.duration * self.layer_num
+            # print('gpu input size: ', x_list[0].size())
+            h0 = Variable(torch.zeros(x_list[0].size()[1], self.output_dim).cuda())
         else:
-            h0 = Variable(torch.zeros(x_list[0].shape[1], self.output_dim))
+            assert len(x_list) == self.duration and len(adj_list) == self.duration
+            # print('cpu input size: ', x_list[0].size())
+            h0 = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
         hx_list = []
         hx = h0
         for i in range(len(x_list)):
-            hx = self.rnn_cell(x_list[i], adj_list[i], hx)
+            if torch.cuda.is_available():
+                temp_adj_list = adj_list[i * self.layer_num: (i + 1) * self.layer_num]
+                # temp_adj_list = nn.ParameterList()
+                # for j in range(i * self.layer_num, (i + 1) * self.layer_num):
+                #     temp_adj_list.append(adj_list[j])
+                hx = self.rnn_cell(x_list[i], temp_adj_list, hx)
+            else:
+                hx = self.rnn_cell(x_list[i], adj_list[i], hx)
             hx_list.append(hx)
         return hx_list
 
@@ -110,33 +121,45 @@ class DynamicEmbedding:
         time_stamp_num = len(date_dir_list)
         assert start_idx < time_stamp_num
 
-        date_adj_list = []
-        node_pair_list = []
-        node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
+        #nn.Parameter(adj, requires_grad=False)
+        #for adj in adj_list_item])
+        if torch.cuda.is_available():
+            date_adj_list = nn.ParameterList()
+        else:
+            date_adj_list = []
+        # node_pair_list = []
+        # node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
 
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             date_dir_path = os.path.join(self.tensor_base_path, date_dir_list[i])
             f_list = os.listdir(date_dir_path)
+            #if torch.cuda.is_available():
+            #    adj_list = nn.ParameterList()
+            #else:
             adj_list = []
-            edge_set = set()
+            #edge_set = set()
             for i, f_name in enumerate(f_list):
                 # print("\t\t" + str(walk_length - i) + "file(s) left")
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
-                rows, cols = spmat.nonzero()
-                edge_set |= set(list(zip(rows, cols)))
+                #rows, cols = spmat.nonzero()
+                #edge_set |= set(list(zip(rows, cols)))
                 sptensor = get_normalize_PPMI_adj(spmat)
-                adj_list.append(sptensor)
-            date_adj_list.append(adj_list)
-
-            neighbor_dict = dict()
-            edge_list = list(edge_set)
-            for edge in edge_list:
-                if edge[0] not in neighbor_dict:
-                    neighbor_dict[edge[0]] = [node2idx_dict[edge[1]]]
+                if torch.cuda.is_available():
+                    date_adj_list.append(nn.Parameter(sptensor, requires_grad=False))
                 else:
-                    neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
-            node_pair_list.append(neighbor_dict)
-        return date_adj_list, node_pair_list
+                    adj_list.append(sptensor)
+            if not torch.cuda.is_available():
+                date_adj_list.append(adj_list)
+        date_adj_list = date_adj_list.to(self.device)
+            # neighbor_dict = dict()
+            # edge_list = list(edge_set)
+            # for edge in edge_list:
+            #     if edge[0] not in neighbor_dict:
+            #         neighbor_dict[self.full_node_list[edge[0]]] = [edge[1]]
+            #     else:
+            #         neighbor_dict[self.full_node_list[edge[0]]].append(edge[1])
+            # node_pair_list.append(neighbor_dict)
+        return date_adj_list
 
     def get_node_pair_list(self, start_idx):
         walk_file_list = sorted(os.listdir(self.walk_base_path))
@@ -148,10 +171,10 @@ class DynamicEmbedding:
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
-                t1 = time.time()
+                #t1 = time.time()
                 edge_list = json.load(fp)
-                t2 = time.time()
-                print('read file time: ', t2 - t1, ' seconds!')
+                # t2 = time.time()
+                # print('read file time: ', t2 - t1, ' seconds!')
                 neighbor_dict = dict()
                 for edge in edge_list:
                     if edge[0] not in neighbor_dict:
@@ -159,8 +182,8 @@ class DynamicEmbedding:
                     else:
                         neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
                 node_pair_list.append(neighbor_dict)
-                t3 = time.time()
-                print('transform time: ', t3 - t2, ' seconds!')
+                #t3 = time.time()
+                #print('transform time: ', t3 - t2, ' seconds!')
                 # graph = nx.Graph()
                 # graph.add_edges_from(edge_list)
                 # t3 = time.time()
@@ -192,9 +215,9 @@ class DynamicEmbedding:
     #     for param_group in optimizer.param_groups:
     #         param_group['lr'] = lr
 
-    def learn_embedding(self, epoch=50, batch_size=1024, lr=1e-3, start_idx=0, weight_decay=0., export=True):
+    def learn_embedding(self, epoch=50, batch_size=10240, lr=1e-3, start_idx=0, weight_decay=0., export=True):
         t1 = time.time()
-        adj_list, node_pair_list = self.get_date_adj_list(start_idx)
+        adj_list = self.get_date_adj_list(start_idx)
         t2 = time.time()
         print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
         node_pair_list, node2idx_dict = self.get_node_pair_list(start_idx)
@@ -204,18 +227,17 @@ class DynamicEmbedding:
         t4 = time.time()
         print('get neg freq list finish! cost time: ', t4 - t3, ' seconds!')
         self.loss.set_node_info(node_pair_list, neg_freq_list, node2idx_dict)
-        t5 = time.time()
-        print("prepare finish! cost time: ", t5 - t4, ' seconds!')
-        time_stamp_num = len(adj_list)
+        #t5 = time.time()
+        #print("prepare finish! cost time: ", t5 - t4, ' seconds!')
         # print('time stamp num: ', time_stamp_num)
-        x_list = [sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num)) for i in range(time_stamp_num)]
+        x_list = [sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num)) for i in range(self.duration)]
         # print('x list len: ', len(x_list))
-
+        model = self.model
         if torch.cuda.is_available():
-            device = torch.device("cuda: 0")
-            model = self.model.to(device)
-        else:
-            model = self.model
+            model = model.to(self.device)
+            x_list_tensor = nn.ParameterList([nn.Parameter(x, requires_grad=False) for x in x_list])
+            x_list = x_list_tensor.to(self.device)
+            torch.cuda.empty_cache()
 
         # 创建优化器（optimizer）
         # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.8, weight_decay=weight_decay)
@@ -228,7 +250,9 @@ class DynamicEmbedding:
         if self.node_num % batch_size != 0:
             batch_num += 1
         # node_list = self.full_node_list.copy()
-
+        st = time.time()
+        train_loss = []
+        flag = False
         for i in range(epoch):
             node_list = np.random.permutation(self.full_node_list)
             for j in range(batch_num):
@@ -247,13 +271,25 @@ class DynamicEmbedding:
                 loss.backward()
                 t4 = time.time()
                 print('backward time: ', t4 - t3, ' seconds!')
+                # gradient accumulation
+                if j == batch_num - 1:  # 重复多次前面的过程
+                    optimizer.step()  # 更新梯度
+                    model.zero_grad()
                 ## 4. weight optimization
                 optimizer.step()  # 更新参数
                 optimizer.zero_grad()  # 清零梯度缓存
-                # train_loss.append(loss.item())
+                torch.cuda.empty_cache()
+                if len(train_loss) > 0:
+                    if np.abs(train_loss[-1] - loss.item()) < 1e-12:
+                        flag = 1
+                        break
+                train_loss.append(loss.item())
                 t5 = time.time()
-                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss, ', cost time: ', t5 - t1, ' seconds!')
-
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t5 - t1, ' seconds!')
+            if flag:
+                break
+        en = time.time()
+        print('training total time: ',en - st, ' seconds!')
         if export:
             for i in range(len(embedding_list)):
                 embedding = embedding_list[i]
@@ -272,11 +308,11 @@ if __name__ == '__main__':
     dyEmbedding = DynamicEmbedding(base_path="../../data/facebook/RWT-GCN", walk_folder='walk_pairs',
                                    freq_folder='node_freq', tensor_folder="walk_tensor",
                                    embedding_folder="embedding", node_file="../nodes_set/nodes.csv",
-                                   output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
+                                   output_dim=128, dropout=0.5, duration=5, neg_num=20, Q=10,
                                    unit_type='GRU', bias=True)
     # dyEmbedding = DynamicEmbedding(base_path="..\\data\\email-eu\\RWT-GCN", walk_folder='walk_pairs',
     #                                freq_folder='node_freq',  tensor_folder="walk_tensor",
     #                                embedding_folder="embedding", node_file="..\\nodes_set\\nodes.csv",
     #                                output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
     #                                unit_type='GRU', bias=True)
-    dyEmbedding.learn_embedding(epoch=50, lr=0.01, start_idx=0, weight_decay=0.0005, export=True)
+    dyEmbedding.learn_embedding(epoch=10, batch_size=1024*5, lr=0.001, start_idx=0, weight_decay=0.0005, export=True)
