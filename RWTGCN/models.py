@@ -41,11 +41,11 @@ class RWTGCN(nn.Module):
     def forward(self, x_list, adj_list):
         if torch.cuda.is_available():
             assert len(x_list) == self.duration and len(adj_list) == self.duration * self.layer_num
-            print('gpu input size: ', x_list[0].size())
+            # print('gpu input size: ', x_list[0].size())
             h0 = Variable(torch.zeros(x_list[0].size()[1], self.output_dim).cuda())
         else:
             assert len(x_list) == self.duration and len(adj_list) == self.duration
-            print('cpu input size: ', x_list[0].size())
+            # print('cpu input size: ', x_list[0].size())
             h0 = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
         hx_list = []
         hx = h0
@@ -254,7 +254,9 @@ class DynamicEmbedding:
         if self.node_num % batch_size != 0:
             batch_num += 1
         # node_list = self.full_node_list.copy()
-        t1 = time.time()
+        st = time.time()
+        train_loss = []
+        flag = False
         for i in range(epoch):
             node_list = np.random.permutation(self.full_node_list)
             for j in range(batch_num):
@@ -281,11 +283,17 @@ class DynamicEmbedding:
                 optimizer.step()  # 更新参数
                 optimizer.zero_grad()  # 清零梯度缓存
                 torch.cuda.empty_cache()
-                # train_loss.append(loss.item())
+                if len(train_loss) > 0:
+                    if np.abs(train_loss[-1] - loss.item()) < 1e-12:
+                        flag = 1
+                        break
+                train_loss.append(loss.item())
                 t5 = time.time()
                 print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t5 - t1, ' seconds!')
-        t2 = time.time()
-        print('training total time: ', t2 - t1, ' seconds!')
+            if flag:
+                break
+        en = time.time()
+        print('training total time: ',en - st, ' seconds!')
         if export:
             for i in range(len(embedding_list)):
                 embedding = embedding_list[i]
