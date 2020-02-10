@@ -1,12 +1,9 @@
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-import os, time, json, sys, random
+import os, time, json, sys
 import torch
 import torch.nn as nn
-from torch import optim
-from torch.utils.data import Dataset
-import networkx as nx
 from torch.autograd import Variable
 sys.path.append("..")
 from RWTGCN.layers import GCGRUCell, GCLSTMCell
@@ -49,7 +46,6 @@ class RWTGCN(nn.Module):
             hx = self.rnn_cell(x_list[i], adj_list[i], hx)
             hx_list.append(hx)
         return hx_list
-
 
 class DynamicEmbedding:
     base_path: str

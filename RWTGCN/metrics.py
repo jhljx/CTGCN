@@ -7,6 +7,7 @@ import random
 class MainLoss(nn.Module):
     node_pair_list: list
     node_freq_list: list
+    node_list: list
     node2idx_dict: dict
     node_num: int
     neg_sample_num: int
@@ -19,13 +20,9 @@ class MainLoss(nn.Module):
     def set_node_info(self, node_pair_list, neg_freq_list, node2idx_dict):
         self.node_pair_list = node_pair_list
         self.neg_freq_list = neg_freq_list
-        node_list = list(self.node_pair_list[0].keys())
-        node_num = len(node_list)
+        self.node_list = list(self.node_pair_list[0].keys())
+        self.node_num = len(self.node_list)
         self.node2idx_dict = node2idx_dict
-        # for i in range(len(node_pair_list)):
-        #     for node in node_list:
-        #         node_pair_dict = self.node_pair_list[i]
-        #         node_pair_dict[node] = [self.node2idx_dict[neighbor] for neighbor in node_pair_dict[node]]
 
     def forward(self, embedding_list, batch_nodes):
         timestamp_num = len(embedding_list)
