@@ -9,10 +9,62 @@ from scipy.spatial.distance import cdist
 from sklearn.metrics import roc_auc_score
 from RWTGCN.utils import check_and_make_path
 
+class DataGenerator(object):
+    base_path: str
+    input_base_path: str
+    output_base_path: str
 
-class AnomalyDetection(object):
-    def __init__(self):
+    def __init__(self, base_path, input_folder, output_folder, ):
+        self.base_path = base_path
+        self.input_base_path = os.path.join(base_path, input_folder)
+        self.output_base_path = os.path.join(base_path, output_folder)
+
         return
+
+    def processEdges(self, fake_edges, data):
+        """
+        remove self-loops and duplicates and order edge
+        :param fake_edges: generated edge list
+        :param data: orginal edge list
+        :return: list of edges
+        """
+        idx_fake = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] > 0)
+
+        tmp = fake_edges[idx_fake]
+        tmp[:, [0, 1]] = tmp[:, [1, 0]]
+
+        fake_edges[idx_fake] = tmp
+
+        idx_remove_dups = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] < 0)
+
+        fake_edges = fake_edges[idx_remove_dups]
+        a = fake_edges.tolist()
+        b = data.tolist()
+        c = []
+
+        for i in a:
+            if i not in b:
+                c.append(i)
+        fake_edges = np.array(c)
+        return fake_edges
+
+
+    def edgeList2Adj(self, data):
+        """
+        converting edge list to graph adjacency matrix
+        :param data: edge list
+        :return: adjacency matrix which is symmetric
+        """
+
+        data = tuple(map(tuple, data))
+
+        n = max(max(user, item) for user, item in data)  # Get size of matrix
+        # print(n)
+        matrix = np.zeros((n, n))
+        for user, item in data:
+            matrix[user - 1][item - 1] = 1  # Convert to 0-based index.
+            matrix[item - 1][user - 1] = 1  # Convert to 0-based index.
+        return matrix
 
     def anomaly_generation(self, ini_graph_percent, anomaly_percent, data, n, m):
         """ generate anomaly
@@ -98,55 +150,7 @@ class AnomalyDetection(object):
                                   shape=(n, n))
         # sparse(train(:,1), train(:,2), ones(length(train), 1), n, n) #TODO: node addition
         train_mat = train_mat + train_mat.transpose()
-
         return synthetic_test, train_mat, train
-
-
-    def processEdges(self, fake_edges, data):
-        """
-        remove self-loops and duplicates and order edge
-        :param fake_edges: generated edge list
-        :param data: orginal edge list
-        :return: list of edges
-        """
-        idx_fake = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] > 0)
-
-        tmp = fake_edges[idx_fake]
-        tmp[:, [0, 1]] = tmp[:, [1, 0]]
-
-        fake_edges[idx_fake] = tmp
-
-        idx_remove_dups = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] < 0)
-
-        fake_edges = fake_edges[idx_remove_dups]
-        a = fake_edges.tolist()
-        b = data.tolist()
-        c = []
-
-        for i in a:
-            if i not in b:
-                c.append(i)
-        fake_edges = np.array(c)
-        return fake_edges
-
-
-    def edgeList2Adj(self, data):
-        """
-        converting edge list to graph adjacency matrix
-        :param data: edge list
-        :return: adjacency matrix which is symmetric
-        """
-
-        data = tuple(map(tuple, data))
-
-        n = max(max(user, item) for user, item in data)  # Get size of matrix
-        # print(n)
-        matrix = np.zeros((n, n))
-        for user, item in data:
-            matrix[user - 1][item - 1] = 1  # Convert to 0-based index.
-            matrix[item - 1][user - 1] = 1  # Convert to 0-based index.
-        return matrix
-
 
     def dynamic_anomaly_generation(self, data_path, sample_path, init_percent=0.8, anomaly_rate=0.2):
         check_and_make_path(sample_path)
@@ -185,6 +189,16 @@ class AnomalyDetection(object):
             df_test['to_id'] = df_test["to_id"].map(lambda x: full_node_list[x])
             df_test.to_csv(os.path.join(sample_path, os.path.splitext(f_name)[0] + '_test.csv'))
 
+class AnomalyDetector(object):
+    base_path: str
+    input_base_path: str
+    output_base_path: str
+
+    def __init__(self, base_path, input_folder, output_folder,):
+        self.base_path = base_path
+        self.input_base_path = os.path.join(base_path, input_folder)
+        self.output_base_path = os.path.join(base_path, output_folder)
+        return
 
     def anomaly_detection(self, embedding, train, synthetic_test, k, encoding_method='Hadamard'):
         """
@@ -267,8 +281,7 @@ class AnomalyDetection(object):
         ab_score = np.sum(min_dist) / (1e-10 + len(min_dist))
         return scores, auc, n, c, res, ab_score
 
-
-    def dynamic_anomaly_detection(self, embedding_path, sample_path, auc_path, k=2):
+    def anomaly_detection_all_time(self, embedding_path, sample_path, auc_path, k=2):
         # 字母前缀个数(要转成数字才能进行array操作，把前缀删掉)
         f_list = os.listdir(embedding_path)
         length = len(f_list)
@@ -308,6 +321,7 @@ class AnomalyDetection(object):
             df_auc.to_csv(os.path.join(auc_embedding_dir_path, embedding_name + '_auc.csv'), sep=',', index=False)
 
 
+
 if __name__ == '__main__':
     data_path = "data\\facebook\\1.format"
     sample_path = "data\\facebook\\sample"
@@ -315,7 +329,9 @@ if __name__ == '__main__':
     auc_path = "data\\facebook\\auc"
 
     # 1. 先生成异常检测的采样样本，得到带label的异常检测数据集
-    dynamic_anomaly_generation(data_path, sample_path, init_percent=0.8, anomaly_rate=0.2)
+    data_generator = DataGenerator()
+    #dynamic_anomaly_generation(data_path, sample_path, init_percent=0.8, anomaly_rate=0.2)
 
+    anomaly_detector = AnomalyDetector()
     # 2. 对每个embedding方法，训练并测试其每个时间片的anomaly detection模型
-    dynamic_anomaly_detection(embedding_path, sample_path, auc_path, k=2)
+    #dynamic_anomaly_detection(embedding_path, sample_path, auc_path, k=2)
