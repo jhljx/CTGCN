@@ -65,7 +65,6 @@ class GatedGraphConvolution(nn.Module):
                + str(self.in_dim) + ' -> ' \
                + str(self.out_dim) + ')'
 
-
 class GatedGCN(nn.Module):
     input_dim: int
     output_dim: int

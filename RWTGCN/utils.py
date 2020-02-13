@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import networkx as nx
-import torch, os, traceback, json
-import time, random
+import os, json, time, random
+import torch
 from sympy import sieve
 
 def check_and_make_path(to_make):
