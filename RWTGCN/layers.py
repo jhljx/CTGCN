@@ -1,6 +1,9 @@
+import sys
+sys.path.append("..")
 import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
+from RWTGCN.models import GCN, MRGCN
 
 class GatedGraphConvolution(nn.Module):
     input_dim: int
@@ -60,38 +63,40 @@ class GatedGraphConvolution(nn.Module):
         output = F.relu(output)
         return trans + gate * (output - trans)
 
+class GraphConvolution(Module):
+    """
+    Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
+    """
+
+    def __init__(self, in_features, out_features, bias=True):
+        super(GraphConvolution, self).__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = Parameter(torch.FloatTensor(in_features, out_features))
+        if bias:
+            self.bias = Parameter(torch.FloatTensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1. / math.sqrt(self.weight.size(1))
+        self.weight.data.uniform_(-stdv, stdv)
+        if self.bias is not None:
+            self.bias.data.uniform_(-stdv, stdv)
+
+    def forward(self, input, adj):
+        support = torch.mm(input, self.weight)
+        output = torch.spmm(adj, support)
+        if self.bias is not None:
+            return output + self.bias
+        else:
+            return output
+
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-               + str(self.in_dim) + ' -> ' \
-               + str(self.out_dim) + ')'
-
-class GatedGCN(nn.Module):
-    input_dim: int
-    output_dim: int
-    layer_num: int
-    dropout: float
-    bias: bool
-
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
-        super(GatedGCN, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.layer_num = layer_num
-        self.dropout = dropout
-        self.bias = bias
-
-        self.gc_list = []
-        self.gc_list.append(GatedGraphConvolution(input_dim, output_dim, bias=bias))
-        for i in range(1, layer_num):
-            self.gc_list.append(GatedGraphConvolution(output_dim, output_dim, bias=bias))
-        self.gc_list = nn.ModuleList(self.gc_list)
-
-    def forward(self, x, adj_list):
-        assert self.layer_num == len(adj_list)
-        for i in range(self.layer_num):
-            x = self.gc_list[i](x, adj_list[i])
-            x = F.dropout(x, self.dropout, training=self.training)
-        return x
+               + str(self.in_features) + ' -> ' \
+               + str(self.out_features) + ')'
 
 
 class GCGRUCell(nn.Module):
@@ -107,7 +112,7 @@ class GCGRUCell(nn.Module):
         self.dropout = dropout
         self.bias = bias
 
-        self.gcn = GatedGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
+        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
         self.x2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
         self.h2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
         self.reset_parameters()
@@ -137,11 +142,6 @@ class GCGRUCell(nn.Module):
 
 
 class GCLSTMCell(nn.Module):
-    """
-    An implementation of Hochreiter & Schmidhuber:
-    'Long-Short Term Memory' cell.
-    http://www.bioinf.jku.at/publications/older/2604.pdf
-    """
     input_dim: int
     output_dim: int
     dropout: float
@@ -154,7 +154,7 @@ class GCLSTMCell(nn.Module):
         self.dropout = dropout
         self.bias = bias
 
-        self.gcn = GatedGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
+        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
         self.x2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
         self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
         self.reset_parameters()

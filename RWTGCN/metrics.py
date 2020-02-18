@@ -7,22 +7,19 @@ import random
 class MainLoss(nn.Module):
     node_pair_list: list
     node_freq_list: list
-    node2idx_dict: dict
     neg_sample_num: int
+    Q: int
 
     def __init__(self, neg_num=20, Q=10):
         super(MainLoss, self).__init__()
         self.neg_sample_num = neg_num
         self.Q = Q
 
-    def set_node_info(self, node_pair_list, neg_freq_list, node2idx_dict):
+    def set_node_info(self, node_pair_list, neg_freq_list):
         self.node_pair_list = node_pair_list
         self.neg_freq_list = neg_freq_list
-        # node_list = list(self.node_pair_list[0].keys())
-        # node_num = len(node_list)
-        self.node2idx_dict = node2idx_dict
 
-    def forward(self, embedding_list, batch_nodes):
+    def forward(self, embedding_list, batch_node_idxs):
         timestamp_num = len(embedding_list)
         assert timestamp_num == len(self.node_pair_list)
         bce_loss = nn.BCEWithLogitsLoss()
@@ -36,17 +33,16 @@ class MainLoss(nn.Module):
             node_freq = self.neg_freq_list[i]
             node_idxs, pos_idxs, neg_idxs  = [], [], []
 
-            for node in batch_nodes:
-                # print('nid = ', nid)
-                nid = self.node2idx_dict[node]
-                neighbor_num = len(node_pair_dict[node])
+            for node_idx in batch_node_idxs:
+                # print('nid = ', node_idx)
+                neighbor_num = len(node_pair_dict[node_idx])
                 if neighbor_num <= self.neg_sample_num:
-                    pos_idxs += node_pair_dict[node]
-                    node_idxs += [nid] * len(node_pair_dict[node])
+                    pos_idxs += node_pair_dict[node_idx]
+                    node_idxs += [node_idx] * len(node_pair_dict[node_idx])
                 else:
-                    pos_idxs += random.sample(node_pair_dict[node], self.neg_sample_num)
-                    node_idxs += [nid] * self.neg_sample_num
-            assert len(node_idxs) <= len(batch_nodes) * self.neg_sample_num
+                    pos_idxs += random.sample(node_pair_dict[node_idx], self.neg_sample_num)
+                    node_idxs += [node_idx] * self.neg_sample_num
+            assert len(node_idxs) <= len(batch_node_idxs) * self.neg_sample_num
             neg_idxs += random.sample(node_freq, self.neg_sample_num)
 
             pos_score = torch.sum(embedding_mat[node_idxs].mul(embedding_mat[pos_idxs]), dim=1)

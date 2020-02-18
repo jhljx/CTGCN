@@ -6,8 +6,8 @@ sys.path.append("..")
 import torch
 import torch.nn as nn
 from RWTGCN.metrics import MainLoss
-from RWTGCN.models import RWTGCN
-from RWTGCN.utils import check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor
+from RWTGCN.models import GCN, MRGCN, RWTGCN
+from RWTGCN.utils import file_cmp, check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor
 
 class DynamicEmbedding:
     base_path: str
@@ -15,6 +15,7 @@ class DynamicEmbedding:
     freq_base_path: str
     tensor_base_path: str
     embedding_base_path: str
+    origin_base_path: str
     model_base_path: str
     full_node_list: list
 
@@ -25,11 +26,12 @@ class DynamicEmbedding:
     output_dim: int
     duration: int
     layer_num: int
-    model: RWTGCN
+    gcn_type: str
+    #model: RWTGCN
     device: torch.device
 
-    def __init__(self, base_path, walk_folder, freq_folder, tensor_folder, embedding_folder, node_file, output_dim, model_folder="model",
-                 dropout=0.5, duration=-1, neg_num=50, Q=10, unit_type='GRU', bias=True):
+    def __init__(self, base_path, walk_folder, freq_folder, tensor_folder, embedding_folder, node_file, output_dim, origin_folder='', model_folder="model",
+                 dropout=0.5, duration=-1, neg_num=50, Q=10, gcn_type='RWTGCN', unit_type='GRU', bias=True):
 
         # file paths
         self.base_path = base_path
@@ -37,6 +39,7 @@ class DynamicEmbedding:
         self.freq_base_path = os.path.join(base_path, freq_folder)
         self.tensor_base_path = os.path.join(base_path, tensor_folder)
         self.embedding_base_path = os.path.join(base_path, embedding_folder)
+        self.origin_base_path = os.path.join(base_path, origin_folder)
         self.model_base_path = os.path.join(base_path, model_folder)
 
         nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
@@ -44,7 +47,7 @@ class DynamicEmbedding:
         self.node_num = len(self.full_node_list)  # node num
         self.output_dim = output_dim
         self.layer_num = len(os.listdir(os.path.join(self.tensor_base_path, os.listdir(self.tensor_base_path)[0])))
-        self.timestamp_list = os.listdir(self.tensor_base_path)
+        self.timestamp_list = sorted(os.listdir(self.tensor_base_path), cmp=file_cmp)
 
         if duration == -1:
             self.duration = len(self.timestamp_list)
@@ -60,9 +63,18 @@ class DynamicEmbedding:
             print("CPU")
             device = torch.device("cpu")
         self.device = device
+        self.gcn_type = gcn_type
 
-        self.model = RWTGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, duration=self.duration,
-                            unit_type=unit_type, bias=bias)
+        if gcn_type == 'RWTGCN':
+            self.model = RWTGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, duration=self.duration,
+                                unit_type=unit_type, bias=bias)
+        elif gcn_type == 'MRGCN':
+            assert self.duration == 1 # duration must be 1 when calling static embeding
+            self.model = MRGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, bias=bias)
+        elif gcn_type == 'GCN':
+            assert self.duration == 1  # duration must be 1 when calling static embeding
+            hid_num = (self.node_num + self.output_dim) // 2
+            self.model = GCN(self.node_num, hid_num, self.output_dim, dropout=dropout, bias=bias)
         self.loss = MainLoss(neg_num=neg_num, Q=Q)
 
         check_and_make_path(self.embedding_base_path)
@@ -74,86 +86,58 @@ class DynamicEmbedding:
         torch.set_num_threads(thread_num)
 
     def get_date_adj_list(self, start_idx):
-        date_dir_list = sorted(os.listdir(self.tensor_base_path))
+        if self.gcn_type == 'GCN':
+            date_dir_list = sorted(os.listdir(self.origin_base_path), cmp=file_cmp)
+            original_graph_path = os.path.join(self.origin_base_path, date_dir_list[start_idx])
+            date_adj_list = []
+            spmat = sp.load_npz(original_graph_path)
+            sptensor = get_normalize_PPMI_adj(spmat)
+            if torch.cuda.is_available():
+                date_adj_list.append(sptensor.cuda())
+            else:
+                date_adj_list.append(sptensor)
+            return date_adj_list
+        # gcn_type == 'MRGCN' or 'RWTGCN'
+        date_dir_list = sorted(os.listdir(self.tensor_base_path), cmp=file_cmp)
         time_stamp_num = len(date_dir_list)
         assert start_idx < time_stamp_num
-
-        #nn.Parameter(adj, requires_grad=False)
-        #for adj in adj_list_item])
-        if torch.cuda.is_available():
-            date_adj_list = nn.ParameterList()
-        else:
-            date_adj_list = []
-        # node_pair_list = []
-        # node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
-
+        date_adj_list = []
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             date_dir_path = os.path.join(self.tensor_base_path, date_dir_list[i])
-            f_list = os.listdir(date_dir_path)
-            #if torch.cuda.is_available():
-            #    adj_list = nn.ParameterList()
-            #else:
+            f_list = sorted(os.listdir(date_dir_path), cmp=file_cmp)
+
             adj_list = []
-            #edge_set = set()
             for i, f_name in enumerate(f_list):
-                # print("\t\t" + str(walk_length - i) + "file(s) left")
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
-                #rows, cols = spmat.nonzero()
-                #edge_set |= set(list(zip(rows, cols)))
                 sptensor = get_normalize_PPMI_adj(spmat)
                 if torch.cuda.is_available():
-                    date_adj_list.append(nn.Parameter(sptensor, requires_grad=False))
+                    adj_list.append(sptensor.cuda())
                 else:
                     adj_list.append(sptensor)
-            if not torch.cuda.is_available():
-                date_adj_list.append(adj_list)
-        date_adj_list = date_adj_list.to(self.device)
-            # neighbor_dict = dict()
-            # edge_list = list(edge_set)
-            # for edge in edge_list:
-            #     if edge[0] not in neighbor_dict:
-            #         neighbor_dict[self.full_node_list[edge[0]]] = [edge[1]]
-            #     else:
-            #         neighbor_dict[self.full_node_list[edge[0]]].append(edge[1])
-            # node_pair_list.append(neighbor_dict)
+            date_adj_list.append(adj_list)
         return date_adj_list
 
     def get_node_pair_list(self, start_idx):
-        walk_file_list = sorted(os.listdir(self.walk_base_path))
+        walk_file_list = sorted(os.listdir(self.walk_base_path), cmp=file_cmp)
         time_stamp_num = len(walk_file_list)
         assert start_idx < time_stamp_num
 
         node_pair_list = []
-        node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
             with open(walk_file_path, 'r') as fp:
-                #t1 = time.time()
                 edge_list = json.load(fp)
-                # t2 = time.time()
-                # print('read file time: ', t2 - t1, ' seconds!')
                 neighbor_dict = dict()
                 for edge in edge_list:
                     if edge[0] not in neighbor_dict:
-                        neighbor_dict[edge[0]] = [node2idx_dict[edge[1]]]
+                        neighbor_dict[edge[0]] = [edge[1]]
                     else:
-                        neighbor_dict[edge[0]].append(node2idx_dict[edge[1]])
+                        neighbor_dict[edge[0]].append(edge[1])
                 node_pair_list.append(neighbor_dict)
-                #t3 = time.time()
-                #print('transform time: ', t3 - t2, ' seconds!')
-                # graph = nx.Graph()
-                # graph.add_edges_from(edge_list)
-                # t3 = time.time()
-                # print('add edges time: ', t3 - t2, ' seconds!')
-                # # convert graph to dict {node: neighbor_list}
-                # node_pair_list.append(nx.to_dict_of_lists(graph))
-                # t4 = time.time()
-                # print('to list time: ', t4 - t3, ' seconds!')
-                # del graph
-        return node_pair_list, node2idx_dict
+        return node_pair_list
 
     def get_neg_freq_list(self, start_idx):
-        freq_file_list = sorted(os.listdir(self.freq_base_path))
+        freq_file_list = sorted(os.listdir(self.freq_base_path), cmp=file_cmp)
         time_stamp_num = len(freq_file_list)
         assert start_idx < time_stamp_num
 
@@ -164,26 +148,18 @@ class DynamicEmbedding:
                 node_freq_list.append(json.load(fp))
         return node_freq_list
 
-
-    # def _adjust_learning_rate(self, optimizer, epoch, initial_lr):
-    #     """Sets the learning rate to the initial LR decayed by 10 every 30 epochs"""
-    #     lr = initial_lr * 0.1
-    #     print('epoch', epoch + 1, 'learn rate', lr)
-    #     for param_group in optimizer.param_groups:
-    #         param_group['lr'] = lr
-
     def learn_embedding(self, epoch=50, batch_size=10240, lr=1e-3, start_idx=0, weight_decay=0., export=True):
         t1 = time.time()
         adj_list = self.get_date_adj_list(start_idx)
         t2 = time.time()
         print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
-        node_pair_list, node2idx_dict = self.get_node_pair_list(start_idx)
+        node_pair_list = self.get_node_pair_list(start_idx)
         t3 = time.time()
         print('get node pair list finish! cost time: ', t3 - t2, ' seconds!')
         neg_freq_list = self.get_neg_freq_list(start_idx)
         t4 = time.time()
         print('get neg freq list finish! cost time: ', t4 - t3, ' seconds!')
-        self.loss.set_node_info(node_pair_list, neg_freq_list, node2idx_dict)
+        self.loss.set_node_info(node_pair_list, neg_freq_list)
         #t5 = time.time()
         #print("prepare finish! cost time: ", t5 - t4, ' seconds!')
         # print('time stamp num: ', time_stamp_num)
@@ -192,8 +168,7 @@ class DynamicEmbedding:
         model = self.model
         if torch.cuda.is_available():
             model = model.to(self.device)
-            x_list_tensor = nn.ParameterList([nn.Parameter(x, requires_grad=False) for x in x_list])
-            x_list = x_list_tensor.to(self.device)
+            x_list = [x.cuda() for x in x_list]
             torch.cuda.empty_cache()
 
         # 创建优化器（optimizer）
@@ -211,7 +186,7 @@ class DynamicEmbedding:
         train_loss = []
         flag = False
         for i in range(epoch):
-            node_list = np.random.permutation(self.full_node_list)
+            node_idx_list = np.random.permutation(np.arange(self.node_num))
             for j in range(batch_num):
                 ## 1. forward propagation
                 t1 = time.time()
@@ -219,9 +194,9 @@ class DynamicEmbedding:
                 t2 = time.time()
                 print('forward time: ', t2 - t1, ' seconds!')
                 # print('finish forward!')
-                batch_nodes = node_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
+                batch_node_idxs = node_idx_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
                 ## 2. loss calculation
-                loss = self.loss(embedding_list, batch_nodes)
+                loss = self.loss(embedding_list, batch_node_idxs)
                 t3 = time.time()
                 print('loss calc time: ', t3 - t2, ' seconds!')
                 ## 3. backward propagation
@@ -260,8 +235,7 @@ class DynamicEmbedding:
         return embedding_list
 
 if __name__ == '__main__':
-    thread_num = os.cpu_count() - 4
-    torch.set_num_threads(thread_num)
+
     dyEmbedding = DynamicEmbedding(base_path="../../data/facebook/RWT-GCN", walk_folder='walk_pairs',
                                    freq_folder='node_freq', tensor_folder="walk_tensor",
                                    embedding_folder="embedding", node_file="../nodes_set/nodes.csv",

@@ -25,9 +25,6 @@ class StructuralNetworkGenerator:
         self.max_neighbor_num = max_neighbor_num
 
         check_and_make_path(self.output_base_path)
-        tem_dir = ['structural_network']
-        for tem in tem_dir:
-            check_and_make_path(os.path.join(self.output_base_path, tem))
 
     def get_structural_network_all_time(self, worker=-1):
         print("getting all timestamps structural network adjacent...")
@@ -39,7 +36,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 self.get_structural_network(
                     input_file=os.path.join(self.input_base_path, f_name),
-                    output_file=os.path.join(self.output_base_path, "structural_network", f_name),
+                    output_file=os.path.join(self.output_base_path, f_name),
                     file_num=length, i=i)
 
         else:
@@ -50,7 +47,7 @@ class StructuralNetworkGenerator:
             for i, f_name in enumerate(f_list):
                 pool.apply_async(self.get_structural_network, (
                     os.path.join(self.input_base_path, f_name),
-                    os.path.join(self.output_base_path, "structural_network", f_name), length, i,))
+                    os.path.join(self.output_base_path, f_name), length, i,))
 
             pool.close()
             pool.join()
@@ -87,21 +84,14 @@ class StructuralNetworkGenerator:
         print('start get structural neighbor!')
         # print('node num = ', color_arr.shape[0])
         t1 = time.time()
-        try:
-            import RWTGCN.preprocessing.helper as helper
-            helper.get_structural_neighbors(color_arr, output_file, cluster_dict,
-                                            cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
-        except:
-            import RWTGCN.utils as utils
-            print('use util get structural neighbors!')
-            utils.get_structural_neighbors(color_arr, output_file, cluster_dict,
-                                               cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
+        import RWTGCN.preprocessing.helper as helper
+        helper.get_structural_neighbors(color_arr, output_file, cluster_dict, cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
         t2 = time.time()
         print('finish get structural neighbor!')
         print('cost time: ', t2 - t1, ' seconds!')
 
 if __name__ == "__main__":
     s = StructuralNetworkGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
-                                   output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
+                                   output_folder="RWT-GCN\\structural_network", node_file="nodes_set\\nodes.csv",
                                    hop=1)
     s.get_structural_network_all_time(worker=-1)

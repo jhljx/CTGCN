@@ -3,16 +3,15 @@ sys.path.append("..")
 from RWTGCN.preprocessing.structure_generation import StructuralNetworkGenerator
 from RWTGCN.preprocessing.tensor_generation import TensorGenerator
 
-
 class Processing:
     structure_generator: StructuralNetworkGenerator
     tensor_generator: TensorGenerator
 
-    def __init__(self, base_path, input_folder, output_folder, node_file, hop=5, max_neighbor_num=100,
-                 walk_time=100, walk_length=5, prob=0.5):
-        self.structure_generator = StructuralNetworkGenerator(base_path, input_folder, output_folder, node_file,
+    def __init__(self, base_path, origin_folder, structure_folder, walk_pair_folder, node_freq_folder, walk_tensor_folder, node_file,
+                 hop=5, max_neighbor_num=100, walk_time=100, walk_length=5, prob=0.5):
+        self.structure_generator = StructuralNetworkGenerator(base_path, origin_folder, structure_folder, node_file,
                                                               hop=hop, max_neighbor_num=max_neighbor_num)
-        self.tensor_generator = TensorGenerator(base_path, input_folder, output_folder, node_file,
+        self.tensor_generator = TensorGenerator(base_path, origin_folder, structure_folder, walk_pair_folder, node_freq_folder, walk_tensor_folder, node_file,
                                                 walk_time=walk_time, walk_length=walk_length, prob=prob)
         return
 
@@ -31,7 +30,7 @@ if __name__ == '__main__':
     processing = Processing(base_path="../../data/facebook", input_folder="1.format",
                             output_folder="RWT-GCN", node_file="nodes_set/nodes.csv",
                             hop=5, max_neighbor_num=100, walk_time=10, walk_length=5, prob=0.5)
-    processing.run(worker=30)
+    run(worker=30)
     # processing = Processing(base_path="..\\..\\data\\email-eu", input_folder="1.format",
     #                         output_folder="RWT-GCN", node_file="nodes_set\\nodes.csv",
     #                         hop=5, max_neighbor_num=50, walk_time=100, walk_length=5, prob=0.5)

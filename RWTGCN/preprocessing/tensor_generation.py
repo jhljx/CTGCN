@@ -1,27 +1,33 @@
 import numpy as np
 import pandas as pd
 import os, multiprocessing, time
+import networkx as nx
 from numpy import random
 import scipy.sparse as sp
 import sys
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path, read_edgelist_from_dataframe
-
+from RWTGCN.utils import check_and_make_path, build_graph
 
 class TensorGenerator:
     base_path: str
-    input_base_path: str
-    output_base_path: str
+    origin_base_path: str
+    structure_base_path: str
+    walk_pair_base_path: str
+    node_freq_base_path: str
+    walk_tensor_base_path: str
     full_node_list: list
     walk_time: int
     walk_length: int
     prob: float
 
-    # 这里的孤点(在nodelist而不在edgelist中的一定不会有游走序列，所以就不再图里添加这些孤点了)
-    def __init__(self, base_path, input_folder, output_folder, node_file, walk_time=100, walk_length=5, prob=0.5):
+    def __init__(self, base_path, origin_folder, structure_folder, walk_pair_folder, node_freq_folder,  walk_tensor_folder, node_file,
+                 walk_time=100, walk_length=5, prob=0.5):
         self.base_path = base_path
-        self.input_base_path = os.path.join(base_path, input_folder)
-        self.output_base_path = os.path.join(base_path, output_folder)
+        self.origin_base_path = '' if origin_folder == '' else os.path.join(base_path, origin_folder)
+        self.structure_base_path = '' if structure_folder == '' else os.path.join(base_path, structure_folder)
+        self.walk_pair_base_path = os.path.join(base_path, walk_pair_folder)
+        self.node_freq_base_path = os.path.join(base_path, node_freq_folder)
+        self.walk_tensor_base_path = '' if walk_tensor_folder == '' else os.path.join(base_path, walk_tensor_folder)
 
         nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
@@ -30,34 +36,39 @@ class TensorGenerator:
         self.walk_length = walk_length
         self.prob = prob
 
-        check_and_make_path(self.output_base_path)
-        tem_dir = ['walk_pairs', 'node_freq', 'walk_tensor']
-        for tem in tem_dir:
-            check_and_make_path(os.path.join(self.output_base_path, tem))
+        check_and_make_path(self.walk_pair_base_path)
+        check_and_make_path(self.node_freq_base_path)
+        check_and_make_path(self.walk_tensor_base_path)
 
-    def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=True):
+    def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=False):
+        import RWTGCN.preprocessing.helper as helper
         print('f_name = ', f_name)
-        f_folder = f_name.split('.')[0]
-        walk_dir_path = os.path.join(self.output_base_path, 'walk_pairs')
-        freq_dir_path = os.path.join(self.output_base_path, 'node_freq')
-        tensor_dir_path = os.path.join(self.output_base_path, 'walk_tensor', f_folder)
-        check_and_make_path(tensor_dir_path)
-
-        original_graph = read_edgelist_from_dataframe(original_graph_path, self.full_node_list)
-        structural_graph = read_edgelist_from_dataframe(structural_graph_path, self.full_node_list)
 
         t1 = time.time()
-        try:
-            import RWTGCN.preprocessing.helper as helper
-            helper.random_walk(original_graph, structural_graph, self.full_node_list,
+        # only random walk on original graph
+        if self.prob == 1:
+            assert original_graph_path != ''
+            original_graph = build_graph(original_graph_path, self.full_node_list)
+            helper.random_walk(original_graph, self.full_node_list, self.walk_pair_base_path, self.node_freq_base_path, f_name,
+                               self.walk_length, self.walk_time, weight)
+        # only random walk on structural graph
+        elif self.prob == 0:
+            assert structural_graph_path != ''
+            structural_graph = build_graph(structural_graph_path, self.full_node_list)
+            helper.random_walk(structural_graph, self.full_node_list, self.walk_pair_base_path, self.node_freq_base_path, f_name,
+                               self.walk_length, self.walk_time, weight)
+        # hybrid random walk on original graph and structural graph
+        else:
+            assert (original_graph_path != '' and structural_graph_path != '' and self.walk_tensor_base_path != '')
+            f_folder = f_name.split('.')[0]
+            tensor_dir_path = os.path.join(self.walk_tensor_base_path, f_folder)
+            check_and_make_path(tensor_dir_path)
+
+            original_graph = build_graph(original_graph_path, self.full_node_list)
+            structural_graph = build_graph(structural_graph_path, self.full_node_list)
+            helper.hybrid_random_walk(original_graph, structural_graph, self.full_node_list,
                                walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
                                self.walk_length, self.walk_time, self.prob, weight)
-        except:
-            import RWTGCN.utils as utils
-            print('use util random walk!')
-            utils.random_walk(original_graph, structural_graph, self.full_node_list,
-                              walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
-                              self.walk_length, self.walk_time, self.prob, weight)
         t2 = time.time()
         print('random walk tot time', t2 - t1, ' seconds!')
 
@@ -67,8 +78,8 @@ class TensorGenerator:
 
         if worker <= 0:
             for i, f_name in enumerate(f_list):
-                original_graph_path = os.path.join(self.input_base_path, f_name)
-                structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
+                original_graph_path = os.path.join(self.origin_base_path, f_name)
+                structural_graph_path = os.path.join(self.structure_base_path, f_name)
                 # t1 = time.time()
                 self.generate_tensor(f_name, original_graph_path=original_graph_path,
                                      structural_graph_path=structural_graph_path)
@@ -79,8 +90,8 @@ class TensorGenerator:
             pool = multiprocessing.Pool(processes=worker)
             print("\t\tstart " + str(worker) + " worker(s)")
             for i, f_name in enumerate(f_list):
-                original_graph_path = os.path.join(self.input_base_path, f_name)
-                structural_graph_path = os.path.join(self.output_base_path, 'structural_network', f_name)
+                original_graph_path = os.path.join(self.origin_base_path, f_name)
+                structural_graph_path =  os.path.join(self.structure_base_path, f_name)
                 pool.apply_async(self.generate_tensor, (f_name, original_graph_path, structural_graph_path))
             pool.close()
             pool.join()
