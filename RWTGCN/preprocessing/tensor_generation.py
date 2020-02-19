@@ -60,7 +60,7 @@ class TensorGenerator:
             if tensor_dir_path != '':
                 check_and_make_path(tensor_dir_path)
             original_graph = build_graph(original_graph_path, self.full_node_list)
-            helper.random_walk(original_graph, self.full_node_list, self.walk_pair_base_path, self.node_freq_base_path, f_name,
+            helper.random_walk(original_graph, self.walk_pair_base_path, self.node_freq_base_path, f_name,
                                tensor_dir_path, self.walk_length, self.walk_time, weight=weight, tensor_flag=(tensor_dir_path != ''))
         # only random walk on structural graph
         elif abs(self.prob) < eps:
@@ -68,7 +68,7 @@ class TensorGenerator:
             if tensor_dir_path != '':
                 check_and_make_path(tensor_dir_path)
             structural_graph = build_graph(structural_graph_path, self.full_node_list)
-            helper.random_walk(structural_graph, self.full_node_list, self.walk_pair_base_path, self.node_freq_base_path, f_name,
+            helper.random_walk(structural_graph, self.walk_pair_base_path, self.node_freq_base_path, f_name,
                                tensor_dir_path, self.walk_length, self.walk_time, weight=weight, tensor_flag=(tensor_dir_path != ''))
         # hybrid random walk on original graph and structural graph
         else:
@@ -76,7 +76,7 @@ class TensorGenerator:
             check_and_make_path(tensor_dir_path)
             original_graph = build_graph(original_graph_path, self.full_node_list)
             structural_graph = build_graph(structural_graph_path, self.full_node_list)
-            helper.hybrid_random_walk(original_graph, structural_graph, self.full_node_list, self.walk_pair_base_path, self.node_freq_base_path,
+            helper.hybrid_random_walk(original_graph, structural_graph, self.walk_pair_base_path, self.node_freq_base_path,
                                       f_name, tensor_dir_path, self.walk_length, self.walk_time, self.prob, weight)
         t2 = time.time()
         print('random walk tot time', t2 - t1, ' seconds!')

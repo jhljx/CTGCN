@@ -61,6 +61,8 @@ class StructuralNetworkGenerator:
             return
         # spadj must be symmetric matrix(input file don't need to have reverse edge)
         spadj = get_sp_adj_mat(input_file, self.full_node_list)
+        node_num = len(self.full_node_list)
+        idx2node_dict = dict(zip(np.arange(node_num).tolist(), self.full_node_list))
         labels = np.ones(node_num)
         print('start wl transform!')
         new_labels, cluster_dict = wl_transform(spadj, labels, cluster=True)
@@ -76,7 +78,7 @@ class StructuralNetworkGenerator:
         # print('node num = ', color_arr.shape[0])
         t1 = time.time()
         import RWTGCN.preprocessing.helper as helper
-        helper.get_structural_neighbors(color_arr, output_file, cluster_dict, cluster_len_dict, idx2nid_dict, self.max_neighbor_num)
+        helper.get_structural_neighbors(color_arr, output_file, cluster_dict, cluster_len_dict, idx2node_dict, self.max_neighbor_num)
         t2 = time.time()
         print('finish get structural neighbor!')
         print('cost time: ', t2 - t1, ' seconds!')

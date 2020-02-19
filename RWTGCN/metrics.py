@@ -34,7 +34,7 @@ class MainLoss(nn.Module):
             node_idxs, pos_idxs, neg_idxs  = [], [], []
 
             for node_idx in batch_node_idxs:
-                # print('nid = ', node_idx)
+                # print('nid = ', node_idx, ', type = ')
                 neighbor_num = len(node_pair_dict[node_idx])
                 if neighbor_num <= self.neg_sample_num:
                     pos_idxs += node_pair_dict[node_idx]

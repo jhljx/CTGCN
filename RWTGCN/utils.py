@@ -12,40 +12,40 @@ def check_and_make_path(to_make):
     if not os.path.exists(to_make):
         os.makedirs(to_make)
 
-def build_graph(file_path, full_node_list, sep='\t', weight_flag=False, save_weight=True):
+def get_walk_neighbor_dict(file_path, node_num):
+    with open(file_path, 'r') as fp:
+        pair_list = json.load(fp)
+    df = pd.DataFrame(pair_list, columns=['from_id', 'to_id'])
+    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", create_using=nx.Graph)
+    graph.add_nodes_from(np.arange(node_num))
+    neighbor_dict = {}
+    for nidx in range(node_num):
+        neighbor_dict[nidx] = list(graph.neighbors(nidx))
+    return neighbor_dict
+
+def build_graph(file_path, full_node_list, sep='\t'):
     node_num = len(full_node_list)
     node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
-    graph_dict = dict(zip(full_node_list, [{}] * node_num))
-    with open(file_path, 'r') as fp:
-        content_list = fp.readlines()
-        # ignore header
-        for line in content_list[1:]:
-            line_list = line.split(sep)
-            from_node, to_node, weight = line_list[0], line_list[1], float(line_list[2])
-            from_id = node2idx_dict[from_node]
-            to_id = node2idx_dict[to_node]
-            if not weight_flag:
-                graph_dict[from_id][to_id] = 1
-                graph_dict[to_id][from_id] = 1
-            else:
-                graph_dict[from_id][to_id] = max(graph_dict[from_id].get(to_id, np.NINF), weight)
-                graph_dict[to_id][from_id] = max(graph_dict[to_id].get(from_id, np.NINF), weight)
-    for node in full_node_list:
-        neighbor_dict = graph_dict[node]
-        neighbor_list = list(neighbor_dict.keys())
-        if save_weight == True:
-            weight_arr = np.array(list(neighbor_dict.values()))
-            weight_arr = weight_arr / weight_arr.sum()
-            graph_dict[node] = {'neighbor': neighbor_list, 'weight': weight_arr.tolist()}
-        else:
-            graph_dict[node] = neighbor_list
-    print(graph_dict[full_node_list[0]])
-    return graph_dict
+    df = pd.read_csv(file_path, sep=sep)
+
+    if df.shape[1] == 2:
+        df['weight'] = 1.0
+    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
+                                    create_using=nx.Graph)
+    graph.add_nodes_from(full_node_list)
+
+    neighbor_dict = {}
+    for nidx, node in enumerate(full_node_list):
+        neighbors = list(graph.neighbors(node))
+        neighbor_dict[nidx] = {'neighbor': list(map(lambda x: node2idx_dict[x], neighbors))}
+        weight_arr = np.array([graph[node][neighbor]['weight'] for neighbor in neighbors])
+        neighbor_dict[nidx]['weight'] = weight_arr / weight_arr.sum()
+    return neighbor_dict
 
 def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
     node_num = len(full_node_list)
     node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
-    A = lil_matrix((node_num, node_num))
+    A = sp.lil_matrix((node_num, node_num))
     with open(file_path, 'r') as fp:
         content_list = fp.readlines()
         # ignore header
@@ -82,7 +82,7 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     return torch.sparse.FloatTensor(indices, values, shape)
 
 
-def get_normalize_PPMI_adj(spmat):
+def get_normalize_adj_tensor(spmat):
     adj = normalize(spmat + sp.eye(spmat.shape[0]))
     adj = sparse_mx_to_torch_sparse_tensor(adj)
     return adj

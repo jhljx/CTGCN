@@ -7,7 +7,8 @@ import torch
 import torch.nn as nn
 from RWTGCN.metrics import MainLoss
 from RWTGCN.models import GCN, MRGCN, RWTGCN
-from RWTGCN.utils import check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor, build_graph, get_sp_adj_mat, separate
+from RWTGCN.utils import check_and_make_path, get_walk_neighbor_dict, get_normalize_adj_tensor, sparse_mx_to_torch_sparse_tensor
+from RWTGCN.utils import build_graph, get_sp_adj_mat, separate
 
 class DynamicEmbedding:
     base_path: str
@@ -102,9 +103,16 @@ class DynamicEmbedding:
             original_graph_path = os.path.join(self.origin_base_path, date_dir_list[start_idx])
             date_adj_list = []
             spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
-            sptensor = get_normalize_PPMI_adj(spmat)
+            #t2 = time.time()
+            # print('get sparse adj time: ', t2 - t1, ' seconds!')
+            sptensor = get_normalize_adj_tensor(spmat)
+            #t3 = time.time()
+            # print('sparse matrix to sparse tensor time: ', t3 - t2, ' seconds!')
             if torch.cuda.is_available():
+                # t1 = time.time()
                 date_adj_list.append(sptensor.cuda())
+                # t2 = time.time()
+                # print('move cuda sparse adj time: ', t2 - t1, ' seconds!')
             else:
                 date_adj_list.append(sptensor)
             return date_adj_list
@@ -120,7 +128,7 @@ class DynamicEmbedding:
             tmp_adj_list, adj_list = [], []
             for i, f_name in enumerate(f_list):
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
-                sptensor = get_normalize_PPMI_adj(spmat)
+                sptensor = get_normalize_adj_tensor(spmat)
                 if self.gcn_type == 'RWTGCN':
                     adj_list = tmp_adj_list
                 else: # MRGCN
@@ -138,7 +146,7 @@ class DynamicEmbedding:
         node_pair_list = []
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
             walk_file_path = os.path.join(self.walk_pair_base_path, walk_file_list[i])
-            graph_dict = build_graph(walk_file_path, self.full_node_list, sep='\t', save_weight=False)
+            graph_dict = get_walk_neighbor_dict(walk_file_path, self.node_num)
             node_pair_list.append(graph_dict)
         return node_pair_list
 
@@ -204,7 +212,7 @@ class DynamicEmbedding:
                 ## 2. loss calculation
                 loss = self.loss(embedding_list, batch_node_idxs)
                 t3 = time.time()
-                print('loss calc time: ', t3 - t2, ' seconds!')
+                print('loss calc time: ', t3 - t2, ' seconds!', ' loss = ', loss.item())
                 ## 3. backward propagation
                 loss.backward()
                 t4 = time.time()
@@ -254,7 +262,7 @@ def static_embedding():
                                    output_dim=128, hid_num=500, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type = 'GCN', bias=True)
     timestamp_num = len(GCN.timestamp_list)
     for idx in range(timestamp_num):
-        GCN.learn_embedding(epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
+        GCN.learn_embedding(epoch=50, batch_size=4096 * 7, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
     t2 = time.time()
     print('finish GCN embedding! cost time: ', t2 - t1, ' seconds!')
     separate()
@@ -267,7 +275,7 @@ def static_embedding():
                                     output_dim=128, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type='MRGCN', bias=True)
     timestamp_num = len(MRGCN.timestamp_list)
     for idx in range(timestamp_num):
-        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
+        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 6, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
     t2 = time.time()
     print('finish MRGCN embedding! cost time: ', t2 - t1, ' seconds!')
 

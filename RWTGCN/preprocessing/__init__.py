@@ -28,6 +28,8 @@ class Processing:
         print('tensor generation time: ', t3 - t2, ' seconds.')
 
 def main():
+    worker = 30
+
     # only random walk on original graph(data for GCN static embedding)
     # prob = 1
     t1 = time.time()
@@ -38,7 +40,7 @@ def main():
     processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder = 'gcn_walk_pairs',
                             node_freq_folder='gcn_node_freq', walk_tensor_folder='', node_file=node_file,
                             hop=5, max_neighbor_num=50, walk_time=10, walk_length=5, prob=1)
-    processing.run(worker=30)
+    processing.run(worker=worker)
     t2 = time.time()
     print('finish gcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
@@ -49,7 +51,7 @@ def main():
     processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder='mrgcn_walk_pairs',
                             node_freq_folder='mrgcn_node_freq', walk_tensor_folder="mrgcn_walk_tensor", node_file=node_file,
                             hop=5, max_neighbor_num=20, walk_time=10, walk_length=5, prob=1)
-    processing.run(worker=30)
+    processing.run(worker=worker)
     t2 = time.time()
     print('finish mrgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
@@ -60,7 +62,7 @@ def main():
                             walk_pair_folder='walk_pairs', node_freq_folder='node_freq',
                             walk_tensor_folder="walk_tensor", node_file=node_file,
                             hop=5, max_neighbor_num=20, walk_time=10, walk_length=5, prob=0.5)
-    processing.run(worker=30)
+    processing.run(worker=worker)
     t2 = time.time()
     print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 

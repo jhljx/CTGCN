@@ -41,7 +41,8 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
                 weights = graph_dict[cur]['weight']
                 if len(neighbors) == 0:
                     break
-                walk.append(np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors))
+                nxt_id = np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors)
+                walk.append(int(nxt_id))
                 cnt += 1
             # count walk pair
             seq_len = len(walk)
@@ -144,7 +145,8 @@ def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path
                     weights = structural_graph_dict[cur]['weight']
                 if len(neighbors) == 0:
                     break
-                walk.append(np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors))
+                nxt_id = np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors)
+                walk.append(int(nxt_id))
                 cnt += 1
 
             seq_len = len(walk)
@@ -196,6 +198,7 @@ def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path
             to_id = edge[1]
             res = log(cnt * all_count / (node_count_dict[from_id] * node_count_dict[to_id]))
             edge_dict[edge] = res if res > 0 else res
+        # sometimes covert dict.keys() into list would cost a lot of time. i.e. for each node, store neighbors in dict. then iterate all nodes to covert each neighbor dict.keys() into list
         edge_arr = np.array(list(edge_dict.keys()))
         weight_arr = np.array(list(edge_dict.values()))
         spmat = sp.coo_matrix((weight_arr, (edge_arr[:,0], edge_arr[:,1])), shape=(node_num, node_num))
