@@ -7,13 +7,13 @@ import torch
 import torch.nn as nn
 from RWTGCN.metrics import MainLoss
 from RWTGCN.models import GCN, MRGCN, RWTGCN
-from RWTGCN.utils import file_cmp, check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor
+from RWTGCN.utils import check_and_make_path, get_normalize_PPMI_adj, sparse_mx_to_torch_sparse_tensor, build_graph, get_sp_adj_mat, separate
 
 class DynamicEmbedding:
     base_path: str
-    walk_base_path: str
-    freq_base_path: str
-    tensor_base_path: str
+    walk_pair_base_path: str
+    node_freq_base_path: str
+    walk_tensor_base_path: str
     embedding_base_path: str
     origin_base_path: str
     model_base_path: str
@@ -25,29 +25,36 @@ class DynamicEmbedding:
     node_num: int
     output_dim: int
     duration: int
-    layer_num: int
+    walk_len: int
     gcn_type: str
     #model: RWTGCN
     device: torch.device
 
-    def __init__(self, base_path, walk_folder, freq_folder, tensor_folder, embedding_folder, node_file, output_dim, origin_folder='', model_folder="model",
-                 dropout=0.5, duration=-1, neg_num=50, Q=10, gcn_type='RWTGCN', unit_type='GRU', bias=True):
+    def __init__(self, base_path, walk_pair_folder, node_freq_folder, walk_tensor_folder, embedding_folder, node_file, origin_folder='', model_folder="model",
+                 output_dim=128, hid_num=500, dropout=0.5, duration=-1, neg_num=50, Q=10, gcn_type='RWTGCN', unit_type='GRU', bias=True):
 
         # file paths
         self.base_path = base_path
-        self.walk_base_path = os.path.join(base_path, walk_folder)
-        self.freq_base_path = os.path.join(base_path, freq_folder)
-        self.tensor_base_path = os.path.join(base_path, tensor_folder)
-        self.embedding_base_path = os.path.join(base_path, embedding_folder)
-        self.origin_base_path = os.path.join(base_path, origin_folder)
-        self.model_base_path = os.path.join(base_path, model_folder)
+        self.walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
+        #print('walk pair: ', self.walk_pair_base_path)
+        self.node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
+        #print('node freq: ', self.node_freq_base_path)
+        self.walk_tensor_base_path = '' if walk_tensor_folder == '' else os.path.abspath(os.path.join(base_path, walk_tensor_folder))
+        print('walk tensor: ', self.walk_tensor_base_path)
+        self.embedding_base_path = os.path.abspath(os.path.join(base_path, embedding_folder))
+        print('embedding: ', self.embedding_base_path)
+        self.origin_base_path = '' if origin_folder == '' else os.path.abspath(os.path.join(base_path, origin_folder))
+        print('origin graph: ', self.origin_base_path)
+        self.model_base_path = os.path.abspath(os.path.join(base_path, model_folder))
+        #print('model: ', self.model_base_path)
 
-        nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
+        node_path = os.path.abspath(os.path.join(base_path, node_file))
+        nodes_set = pd.read_csv(node_path, names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
         self.node_num = len(self.full_node_list)  # node num
         self.output_dim = output_dim
-        self.layer_num = len(os.listdir(os.path.join(self.tensor_base_path, os.listdir(self.tensor_base_path)[0])))
-        self.timestamp_list = sorted(os.listdir(self.tensor_base_path), cmp=file_cmp)
+        self.timestamp_list = sorted(os.listdir(self.walk_pair_base_path))
+        # print('timestamp list:', self.timestamp_list)
 
         if duration == -1:
             self.duration = len(self.timestamp_list)
@@ -65,15 +72,19 @@ class DynamicEmbedding:
         self.device = device
         self.gcn_type = gcn_type
 
+
         if gcn_type == 'RWTGCN':
-            self.model = RWTGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, duration=self.duration,
+            self.walk_len = len(os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
+            print('walk_len: ', self.walk_len)
+            self.model = RWTGCN(self.node_num, self.output_dim, self.walk_len, dropout=dropout, duration=self.duration,
                                 unit_type=unit_type, bias=bias)
         elif gcn_type == 'MRGCN':
             assert self.duration == 1 # duration must be 1 when calling static embeding
-            self.model = MRGCN(self.node_num, self.output_dim, self.layer_num, dropout=dropout, bias=bias)
+            self.walk_len = len(os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
+            print('walk_len: ', self.walk_len)
+            self.model = MRGCN(self.node_num, self.output_dim, self.walk_len, dropout=dropout, bias=bias)
         elif gcn_type == 'GCN':
             assert self.duration == 1  # duration must be 1 when calling static embeding
-            hid_num = (self.node_num + self.output_dim) // 2
             self.model = GCN(self.node_num, hid_num, self.output_dim, dropout=dropout, bias=bias)
         self.loss = MainLoss(neg_num=neg_num, Q=Q)
 
@@ -87,10 +98,10 @@ class DynamicEmbedding:
 
     def get_date_adj_list(self, start_idx):
         if self.gcn_type == 'GCN':
-            date_dir_list = sorted(os.listdir(self.origin_base_path), cmp=file_cmp)
+            date_dir_list = sorted(os.listdir(self.origin_base_path))
             original_graph_path = os.path.join(self.origin_base_path, date_dir_list[start_idx])
             date_adj_list = []
-            spmat = sp.load_npz(original_graph_path)
+            spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
             sptensor = get_normalize_PPMI_adj(spmat)
             if torch.cuda.is_available():
                 date_adj_list.append(sptensor.cuda())
@@ -98,57 +109,52 @@ class DynamicEmbedding:
                 date_adj_list.append(sptensor)
             return date_adj_list
         # gcn_type == 'MRGCN' or 'RWTGCN'
-        date_dir_list = sorted(os.listdir(self.tensor_base_path), cmp=file_cmp)
+        date_dir_list = sorted(os.listdir(self.walk_tensor_base_path))
         time_stamp_num = len(date_dir_list)
         assert start_idx < time_stamp_num
         date_adj_list = []
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
-            date_dir_path = os.path.join(self.tensor_base_path, date_dir_list[i])
-            f_list = sorted(os.listdir(date_dir_path), cmp=file_cmp)
+            date_dir_path = os.path.join(self.walk_tensor_base_path, date_dir_list[i])
+            f_list = sorted(os.listdir(date_dir_path))
 
-            adj_list = []
+            tmp_adj_list, adj_list = [], []
             for i, f_name in enumerate(f_list):
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
                 sptensor = get_normalize_PPMI_adj(spmat)
-                if torch.cuda.is_available():
-                    adj_list.append(sptensor.cuda())
-                else:
-                    adj_list.append(sptensor)
-            date_adj_list.append(adj_list)
+                if self.gcn_type == 'RWTGCN':
+                    adj_list = tmp_adj_list
+                else: # MRGCN
+                    adj_list = date_adj_list
+                adj_list.append(sptensor.cuda()  if torch.cuda.is_available() else sptensor)
+            if self.gcn_type == 'RWGCN':
+                date_adj_list.append(adj_list)
         return date_adj_list
 
     def get_node_pair_list(self, start_idx):
-        walk_file_list = sorted(os.listdir(self.walk_base_path), cmp=file_cmp)
+        walk_file_list = sorted(os.listdir(self.walk_pair_base_path))
         time_stamp_num = len(walk_file_list)
         assert start_idx < time_stamp_num
 
         node_pair_list = []
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
-            walk_file_path = os.path.join(self.walk_base_path, walk_file_list[i])
-            with open(walk_file_path, 'r') as fp:
-                edge_list = json.load(fp)
-                neighbor_dict = dict()
-                for edge in edge_list:
-                    if edge[0] not in neighbor_dict:
-                        neighbor_dict[edge[0]] = [edge[1]]
-                    else:
-                        neighbor_dict[edge[0]].append(edge[1])
-                node_pair_list.append(neighbor_dict)
+            walk_file_path = os.path.join(self.walk_pair_base_path, walk_file_list[i])
+            graph_dict = build_graph(walk_file_path, self.full_node_list, sep='\t', save_weight=False)
+            node_pair_list.append(graph_dict)
         return node_pair_list
 
     def get_neg_freq_list(self, start_idx):
-        freq_file_list = sorted(os.listdir(self.freq_base_path), cmp=file_cmp)
+        freq_file_list = sorted(os.listdir(self.node_freq_base_path))
         time_stamp_num = len(freq_file_list)
         assert start_idx < time_stamp_num
 
         node_freq_list = []
         for i in range(start_idx, min(start_idx + self.duration, time_stamp_num)):
-            freq_file_path = os.path.join(self.freq_base_path, freq_file_list[i])
+            freq_file_path = os.path.join(self.node_freq_base_path, freq_file_list[i])
             with open(freq_file_path, 'r') as fp:
                 node_freq_list.append(json.load(fp))
         return node_freq_list
 
-    def learn_embedding(self, epoch=50, batch_size=10240, lr=1e-3, start_idx=0, weight_decay=0., export=True):
+    def learn_embedding(self, epoch=50, batch_size=10240, lr=1e-3, start_idx=0, weight_decay=0., model_file='rwtgcn', export=True):
         t1 = time.time()
         adj_list = self.get_date_adj_list(start_idx)
         t2 = time.time()
@@ -225,26 +231,56 @@ class DynamicEmbedding:
         if export:
             for i in range(len(embedding_list)):
                 embedding = embedding_list[i]
-                timestamp = self.timestamp_list[start_idx + i]
+                timestamp = self.timestamp_list[start_idx + i].split('.')[0]
                 df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
                 embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
                 df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
 
         # 保存模型
-        torch.save(model.state_dict(), os.path.join(self.model_base_path, "RWTGCN_model"))
+        torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
         return embedding_list
 
-if __name__ == '__main__':
+def static_embedding():
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/facebook/RWT-GCN'))
+    print(base_path)
+    origin_folder = os.path.join('..', '1.format')
+    embedding_folder = os.path.join('..', '2.embedding/GCN')
+    node_file = os.path.join('..', 'nodes_set/nodes.csv')
+    t1 = time.time()
+    print('start GCN embedding!')
+    GCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='gcn_walk_pairs',
+                                   node_freq_folder='gcn_node_freq', walk_tensor_folder='', embedding_folder=embedding_folder,
+                                   node_file=node_file, origin_folder=origin_folder, model_folder='model',
+                                   output_dim=128, hid_num=500, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type = 'GCN', bias=True)
+    timestamp_num = len(GCN.timestamp_list)
+    for idx in range(timestamp_num):
+        GCN.learn_embedding(epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
+    t2 = time.time()
+    print('finish GCN embedding! cost time: ', t2 - t1, ' seconds!')
+    separate()
+    t1 = time.time()
+    print('start MRGCN embedding!')
+    embedding_folder = os.path.join('..', '2.embedding/MRGCN')
+    MRGCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='walk_pairs',
+                                    node_freq_folder='node_freq', walk_tensor_folder="walk_tensor", embedding_folder=embedding_folder,
+                                    node_file=node_file, origin_folder='', model_folder='model',
+                                    output_dim=128, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type='MRGCN', bias=True)
+    timestamp_num = len(MRGCN.timestamp_list)
+    for idx in range(timestamp_num):
+        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
+    t2 = time.time()
+    print('finish MRGCN embedding! cost time: ', t2 - t1, ' seconds!')
 
+def dynamic_embedding():
     dyEmbedding = DynamicEmbedding(base_path="../../data/facebook/RWT-GCN", walk_folder='walk_pairs',
                                    freq_folder='node_freq', tensor_folder="walk_tensor",
                                    embedding_folder="embedding", node_file="../nodes_set/nodes.csv",
                                    output_dim=128, dropout=0.5, duration=5, neg_num=20, Q=10,
                                    unit_type='GRU', bias=True)
-    # dyEmbedding = DynamicEmbedding(base_path="..\\data\\email-eu\\RWT-GCN", walk_folder='walk_pairs',
-    #                                freq_folder='node_freq',  tensor_folder="walk_tensor",
-    #                                embedding_folder="embedding", node_file="..\\nodes_set\\nodes.csv",
-    #                                output_dim=128, dropout=0.5, duration=5, neg_num=50, Q=10,
-    #                                unit_type='GRU', bias=True)
-    dyEmbedding.learn_embedding(epoch=10, batch_size=1024*5, lr=0.001, start_idx=0, weight_decay=0.0005, export=True)
+    dyEmbedding.learn_embedding(epoch=10, batch_size=1024 * 5, lr=0.001, start_idx=0, weight_decay=0.0005, export=True)
+
+if __name__ == '__main__':
+
+   static_embedding()
+
 

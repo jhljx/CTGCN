@@ -4,7 +4,7 @@ import scipy.sparse as sp
 import os, multiprocessing, random
 import sys, time
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path, wl_transform
+from RWTGCN.utils import check_and_make_path, wl_transform, get_sp_adj_mat
 
 class StructuralNetworkGenerator:
     base_path: str
@@ -16,10 +16,11 @@ class StructuralNetworkGenerator:
 
     def __init__(self, base_path, input_folder, output_folder, node_file, hop=5, max_neighbor_num=100):
         self.base_path = base_path
-        self.input_base_path = os.path.join(base_path, input_folder)
-        self.output_base_path = os.path.join(base_path, output_folder)
+        self.input_base_path = os.path.abspath(os.path.join(base_path, input_folder))
+        self.output_base_path = os.path.abspath(os.path.join(base_path, output_folder))
 
-        nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
+        node_path = os.path.abspath(os.path.join(base_path, node_file))
+        nodes_set = pd.read_csv(node_path, names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
         self.hop = hop
         self.max_neighbor_num = max_neighbor_num
@@ -48,7 +49,6 @@ class StructuralNetworkGenerator:
                 pool.apply_async(self.get_structural_network, (
                     os.path.join(self.input_base_path, f_name),
                     os.path.join(self.output_base_path, f_name), length, i,))
-
             pool.close()
             pool.join()
         print("got it...")
@@ -59,23 +59,14 @@ class StructuralNetworkGenerator:
             print('\t', output_file, "exist")
             print('\t', str(file_num - i), ' finished')
             return
-
-        df_origin = pd.read_csv(input_file, sep="\t")
-        node_num = len(self.full_node_list)
-        nid2idx_dict = dict(zip(self.full_node_list, np.arange(node_num).tolist()))
-        idx2nid_dict = dict(zip(np.arange(node_num).tolist(), self.full_node_list))
-        df_origin['from_id'] = df_origin['from_id'].map(nid2idx_dict)
-        df_origin['to_id'] = df_origin['to_id'].map(nid2idx_dict)
-        spadj = sp.csr_matrix((df_origin['weight'], (df_origin['from_id'], df_origin['to_id'])),
-                              shape=(node_num, node_num))
-        del df_origin
+        # spadj must be symmetric matrix(input file don't need to have reverse edge)
+        spadj = get_sp_adj_mat(input_file, self.full_node_list)
         labels = np.ones(node_num)
         print('start wl transform!')
         new_labels, cluster_dict = wl_transform(spadj, labels, cluster=True)
         cluster_len_dict = {}
         for cluster_type, cluster_list in cluster_dict.items():
             cluster_len_dict[cluster_type] = len(cluster_list)
-
         color_arr = new_labels.reshape(-1, 1)
         for i in range(1, self.hop):
             new_labels = wl_transform(spadj, new_labels, cluster=False)

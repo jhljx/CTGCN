@@ -3,7 +3,6 @@ sys.path.append("..")
 import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
-from RWTGCN.models import GCN, MRGCN
 
 class GatedGraphConvolution(nn.Module):
     input_dim: int
@@ -63,7 +62,7 @@ class GatedGraphConvolution(nn.Module):
         output = F.relu(output)
         return trans + gate * (output - trans)
 
-class GraphConvolution(Module):
+class GraphConvolution(nn.Module):
     """
     Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
     """
@@ -72,9 +71,9 @@ class GraphConvolution(Module):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = Parameter(torch.FloatTensor(in_features, out_features))
+        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
         if bias:
-            self.bias = Parameter(torch.FloatTensor(out_features))
+            self.bias = nn.Parameter(torch.FloatTensor(out_features))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -97,85 +96,3 @@ class GraphConvolution(Module):
         return self.__class__.__name__ + ' (' \
                + str(self.in_features) + ' -> ' \
                + str(self.out_features) + ')'
-
-
-class GCGRUCell(nn.Module):
-    input_dim: int
-    output_dim: int
-    dropout: float
-    bias: bool
-
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
-        super(GCGRUCell, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.dropout = dropout
-        self.bias = bias
-
-        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
-        self.x2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
-        self.h2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        std = 1.0 / math.sqrt(self.output_dim)
-        for w in self.parameters():
-            w.data.uniform_(-std, std)
-
-    def forward(self, x, adj_list, hidden):
-        x = self.gcn(x, adj_list)
-        gate_x = self.x2h(x)
-        gate_h = self.h2h(hidden)
-
-        gate_x = gate_x.squeeze()
-        gate_h = gate_h.squeeze()
-
-        i_r, i_i, i_n = gate_x.chunk(3, 1)
-        h_r, h_i, h_n = gate_h.chunk(3, 1)
-
-        resetgate = torch.sigmoid(i_r + h_r)
-        inputgate = torch.sigmoid(i_i + h_i)
-        newgate = torch.tanh(i_n + (resetgate * h_n))
-
-        hy = newgate + inputgate * (hidden - newgate)
-        return hy
-
-
-class GCLSTMCell(nn.Module):
-    input_dim: int
-    output_dim: int
-    dropout: float
-    bias: bool
-
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
-        super(GCLSTMCell, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.dropout = dropout
-        self.bias = bias
-
-        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
-        self.x2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
-        self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        std = 1.0 / math.sqrt(self.output_dim)
-        for w in self.parameters():
-            w.data.uniform_(-std, std)
-
-    def forward(self, x, adj_list, hidden):
-        x = self.gcn(x, adj_list)
-        hx, cx = hidden
-        gates = self.x2h(x) + self.h2h(hx)
-        gates = gates.squeeze()
-        ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
-
-        ingate = torch.sigmoid(ingate)
-        forgetgate = torch.sigmoid(forgetgate)
-        cellgate = torch.tanh(cellgate)
-        outgate = torch.sigmoid(outgate)
-
-        cy = torch.mul(cx, forgetgate) + torch.mul(ingate, cellgate)
-        hy = torch.mul(outgate, torch.tanh(cy))
-        return hy, cy

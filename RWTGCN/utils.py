@@ -12,13 +12,56 @@ def check_and_make_path(to_make):
     if not os.path.exists(to_make):
         os.makedirs(to_make)
 
-def build_graph(filename, full_node_list):
-    df = pd.read_csv(filename, sep='\t')
-    # dataframe['weight'] = 1.0
-    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
-                                    create_using=nx.Graph)
-    graph.add_nodes_from(full_node_list)
-    return graph
+def build_graph(file_path, full_node_list, sep='\t', weight_flag=False, save_weight=True):
+    node_num = len(full_node_list)
+    node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
+    graph_dict = dict(zip(full_node_list, [{}] * node_num))
+    with open(file_path, 'r') as fp:
+        content_list = fp.readlines()
+        # ignore header
+        for line in content_list[1:]:
+            line_list = line.split(sep)
+            from_node, to_node, weight = line_list[0], line_list[1], float(line_list[2])
+            from_id = node2idx_dict[from_node]
+            to_id = node2idx_dict[to_node]
+            if not weight_flag:
+                graph_dict[from_id][to_id] = 1
+                graph_dict[to_id][from_id] = 1
+            else:
+                graph_dict[from_id][to_id] = max(graph_dict[from_id].get(to_id, np.NINF), weight)
+                graph_dict[to_id][from_id] = max(graph_dict[to_id].get(from_id, np.NINF), weight)
+    for node in full_node_list:
+        neighbor_dict = graph_dict[node]
+        neighbor_list = list(neighbor_dict.keys())
+        if save_weight == True:
+            weight_arr = np.array(list(neighbor_dict.values()))
+            weight_arr = weight_arr / weight_arr.sum()
+            graph_dict[node] = {'neighbor': neighbor_list, 'weight': weight_arr.tolist()}
+        else:
+            graph_dict[node] = neighbor_list
+    print(graph_dict[full_node_list[0]])
+    return graph_dict
+
+def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
+    node_num = len(full_node_list)
+    node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
+    A = lil_matrix((node_num, node_num))
+    with open(file_path, 'r') as fp:
+        content_list = fp.readlines()
+        # ignore header
+        for line in content_list[1:]:
+            line_list = line.split(sep)
+            from_node, to_node, weight = line_list[0], line_list[1], float(line_list[2])
+            from_id = node2idx_dict[from_node]
+            to_id = node2idx_dict[to_node]
+            if not weight_flag:
+                A[from_id, to_id] = 1
+                A[to_id, from_id] = 1
+            else:
+                A[from_id, to_id] = weight
+                A[to_id, from_id] = weight
+    A = A.tocsr()
+    return A
 
 def normalize(mx):
     """Row-normalize sparse matrix"""
@@ -43,17 +86,6 @@ def get_normalize_PPMI_adj(spmat):
     adj = normalize(spmat + sp.eye(spmat.shape[0]))
     adj = sparse_mx_to_torch_sparse_tensor(adj)
     return adj
-
-
-def file_cmp(a, b, time_format=None):
-    a_name = os.path.splitext(a)[0]
-    b_name = os.path.splitext(b)[0]
-    if time_format is None:
-        return int(a_name) - int(b_name)
-    from datetime import datetime
-    a_time = datetime.strptime(a_name, time_format)
-    b_time = datetime.strptime(b_name, time_format)
-    return (a_time - b_time).total_seconds()
 
 # def round_func(val):
 #     from decimal import Decimal, ROUND_HALF_UP
@@ -81,6 +113,13 @@ def wl_transform(spadj, labels, cluster=False):
     import RWTGCN.preprocessing.helper as helper
     return helper.uniquetol(signatures, cluster=cluster)
 
+def separate(info='', sep='=', num=5):
+    print()
+    if len(info) == 0:
+        print(sep * (2 * num))
+    else:
+        print(sep * num, info, sep * num)
+    print()
 
 if __name__ == '__main__':
     A = np.array([[0, 1, 1, 1, 1],
