@@ -189,6 +189,13 @@ def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path
     t4 = time.time()
     print('walk pair time: ', t4 - t3, ' seconds!')
 
+    cdef int max_bit = 0
+    cdef int max_walk_len = walk_len
+    while max_walk_len > 0:
+        max_walk_len /= 10
+        max_bit += 1
+    format_str = ':0>' + str(max_bit) + 'd}'
+
     for idx in range(1, walk_len):
         edge_dict = walk_adj_list[idx]
         node_count_dict = node_count_list[idx]
@@ -202,7 +209,8 @@ def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path
         edge_arr = np.array(list(edge_dict.keys()))
         weight_arr = np.array(list(edge_dict.values()))
         spmat = sp.coo_matrix((weight_arr, (edge_arr[:,0], edge_arr[:,1])), shape=(node_num, node_num))
-        sp.save_npz(os.path.join(tensor_dir_path, str(idx) + ".npz"), spmat)
+        signature = format_str.format(idx)
+        sp.save_npz(os.path.join(tensor_dir_path, signature + ".npz"), spmat)
     t5 = time.time()
     print('walk tensor time: ', t5 - t4, ' seconds!')
 

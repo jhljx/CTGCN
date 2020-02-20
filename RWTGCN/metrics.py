@@ -20,15 +20,21 @@ class MainLoss(nn.Module):
         self.neg_freq_list = neg_freq_list
 
     def forward(self, embedding_list, batch_node_idxs):
-        timestamp_num = len(embedding_list)
-        assert timestamp_num == len(self.node_pair_list)
+        if isinstance(embedding_list, list):
+            timestamp_num = len(embedding_list)
+            assert timestamp_num == len(self.node_pair_list)
+        else:
+            timestamp_num = 1
         bce_loss = nn.BCEWithLogitsLoss()
         if torch.cuda.is_available():
             loss_val_sum = torch.tensor([0.]).cuda()
         else:
             loss_val_sum = torch.tensor([0.])
         for i in range(timestamp_num):
-            embedding_mat = embedding_list[i]
+            if isinstance(embedding_list, list):
+                embedding_mat = embedding_list[i]
+            else:
+                embedding_mat = embedding_list
             node_pair_dict = self.node_pair_list[i]
             node_freq = self.neg_freq_list[i]
             node_idxs, pos_idxs, neg_idxs  = [], [], []
@@ -44,11 +50,27 @@ class MainLoss(nn.Module):
                     node_idxs += [node_idx] * self.neg_sample_num
             assert len(node_idxs) <= len(batch_node_idxs) * self.neg_sample_num
             neg_idxs += random.sample(node_freq, self.neg_sample_num)
-
+            ######################
+            # this block is quite important, otherwise the code will cause memory leak!
+            node_idxs = torch.LongTensor(node_idxs)
+            pos_idxs = torch.LongTensor(pos_idxs)
+            neg_idxs = torch.LongTensor(neg_idxs)
+            if torch.cuda.is_available():
+                node_idxs = node_idxs.cuda()
+                pos_idxs = pos_idxs.cuda()
+                neg_idxs = neg_idxs.cuda()
+            # this block is quite important, otherwise the code will cause memory leak!
+            #######################
             pos_score = torch.sum(embedding_mat[node_idxs].mul(embedding_mat[pos_idxs]), dim=1)
             neg_score = -1.0 * torch.sum(embedding_mat[node_idxs].matmul(torch.transpose(embedding_mat[neg_idxs], 1, 0)), dim=1)
+            del node_idxs, pos_idxs, neg_idxs
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
-            loss_val = torch.mean(bce_loss(pos_score, torch.ones_like(pos_score))) + \
-                       self.Q * torch.mean(bce_loss(neg_score, torch.zeros_like(neg_score)))
+            loss_val = bce_loss(pos_score, torch.ones_like(pos_score)) + \
+                       self.Q * bce_loss(neg_score, torch.ones_like(neg_score))
+
+            # loss_val = bce_loss(embedding_mat[batch_node_idxs], torch.ones_like(embedding_mat[batch_node_idxs]))
             loss_val_sum += loss_val
+            del loss_val
         return loss_val_sum

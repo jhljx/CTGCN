@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import os, time, json, sys
+import gc
 sys.path.append("..")
 import torch
 import torch.nn as nn
@@ -25,15 +26,18 @@ class DynamicEmbedding:
     full_node_set: list
     node_num: int
     output_dim: int
+    hid_num: int
+    dropout: float
     duration: int
     walk_len: int
     gcn_type: str
+    unit_type: str
+    bias: bool
     #model: RWTGCN
     device: torch.device
 
     def __init__(self, base_path, walk_pair_folder, node_freq_folder, walk_tensor_folder, embedding_folder, node_file, origin_folder='', model_folder="model",
                  output_dim=128, hid_num=500, dropout=0.5, duration=-1, neg_num=50, Q=10, gcn_type='RWTGCN', unit_type='GRU', bias=True):
-
         # file paths
         self.base_path = base_path
         self.walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
@@ -54,9 +58,10 @@ class DynamicEmbedding:
         self.full_node_list = nodes_set['node'].tolist()
         self.node_num = len(self.full_node_list)  # node num
         self.output_dim = output_dim
+        self.hid_num = hid_num
+        self.dropout = dropout
         self.timestamp_list = sorted(os.listdir(self.walk_pair_base_path))
         # print('timestamp list:', self.timestamp_list)
-
         if duration == -1:
             self.duration = len(self.timestamp_list)
         else:
@@ -66,27 +71,15 @@ class DynamicEmbedding:
         if torch.cuda.is_available():
             print("GPU")
             device = torch.device("cuda: 0")
-            self.set_thread()
+            #
         else:
             print("CPU")
             device = torch.device("cpu")
+            # self.set_thread()
         self.device = device
         self.gcn_type = gcn_type
-
-
-        if gcn_type == 'RWTGCN':
-            self.walk_len = len(os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
-            print('walk_len: ', self.walk_len)
-            self.model = RWTGCN(self.node_num, self.output_dim, self.walk_len, dropout=dropout, duration=self.duration,
-                                unit_type=unit_type, bias=bias)
-        elif gcn_type == 'MRGCN':
-            assert self.duration == 1 # duration must be 1 when calling static embeding
-            self.walk_len = len(os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
-            print('walk_len: ', self.walk_len)
-            self.model = MRGCN(self.node_num, self.output_dim, self.walk_len, dropout=dropout, bias=bias)
-        elif gcn_type == 'GCN':
-            assert self.duration == 1  # duration must be 1 when calling static embeding
-            self.model = GCN(self.node_num, hid_num, self.output_dim, dropout=dropout, bias=bias)
+        self.unit_type = unit_type
+        self.bias = bias
         self.loss = MainLoss(neg_num=neg_num, Q=Q)
 
         check_and_make_path(self.embedding_base_path)
@@ -96,6 +89,25 @@ class DynamicEmbedding:
         if thread_num is None:
             thread_num = os.cpu_count() - 4
         torch.set_num_threads(thread_num)
+
+    def reset_model(self):
+        if self.gcn_type == 'RWTGCN':
+            self.walk_len = len(
+                os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
+            print('walk_len: ', self.walk_len)
+            self.model = RWTGCN(self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, duration=self.duration,
+                                unit_type=self.unit_type, bias=self.bias)
+        elif self.gcn_type == 'MRGCN':
+            assert self.duration == 1  # duration must be 1 when calling static embeding
+            self.walk_len = len(
+                os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
+            print('walk_len: ', self.walk_len)
+            self.model = MRGCN(self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, bias=self.bias)
+        elif self.gcn_type == 'GCN':
+            assert self.duration == 1  # duration must be 1 when calling static embeding
+            self.model = GCN(self.node_num, self.hid_num, self.output_dim, dropout=self.dropout, bias=self.bias)
+        else:
+            raise Exception('unsupported gcn type!')
 
     def get_date_adj_list(self, start_idx):
         if self.gcn_type == 'GCN':
@@ -163,119 +175,104 @@ class DynamicEmbedding:
         return node_freq_list
 
     def learn_embedding(self, epoch=50, batch_size=10240, lr=1e-3, start_idx=0, weight_decay=0., model_file='rwtgcn', export=True):
-        t1 = time.time()
+        separate()
+        walk_file_list = sorted(os.listdir(self.walk_pair_base_path))
+        time_stamp_num = len(walk_file_list)
+        timestamps = ','.join([self.timestamp_list[i].split('.')[0] for i in range(start_idx, min(start_idx + self.duration, time_stamp_num))])
+        print('train on ', timestamps)
+        st = time.time()
         adj_list = self.get_date_adj_list(start_idx)
-        t2 = time.time()
-        print('get adj list finish! cost time: ', t2 - t1, ' seconds!')
         node_pair_list = self.get_node_pair_list(start_idx)
-        t3 = time.time()
-        print('get node pair list finish! cost time: ', t3 - t2, ' seconds!')
         neg_freq_list = self.get_neg_freq_list(start_idx)
-        t4 = time.time()
-        print('get neg freq list finish! cost time: ', t4 - t3, ' seconds!')
         self.loss.set_node_info(node_pair_list, neg_freq_list)
-        #t5 = time.time()
-        #print("prepare finish! cost time: ", t5 - t4, ' seconds!')
-        # print('time stamp num: ', time_stamp_num)
         x_list = [sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num)) for i in range(self.duration)]
-        # print('x list len: ', len(x_list))
+        self.reset_model()
         model = self.model
         if torch.cuda.is_available():
             model = model.to(self.device)
             x_list = [x.cuda() for x in x_list]
             torch.cuda.empty_cache()
 
-        # 创建优化器（optimizer）
         # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.8, weight_decay=weight_decay)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
         optimizer.zero_grad()
-        # train_loss = []
 
         embedding_list = []
         batch_num = self.node_num // batch_size
         if self.node_num % batch_size != 0:
             batch_num += 1
-        # node_list = self.full_node_list.copy()
-        st = time.time()
-        train_loss = []
-        flag = False
+
         for i in range(epoch):
             node_idx_list = np.random.permutation(np.arange(self.node_num))
             for j in range(batch_num):
-                ## 1. forward propagation
                 t1 = time.time()
                 embedding_list = model(x_list, adj_list)
-                t2 = time.time()
-                print('forward time: ', t2 - t1, ' seconds!')
-                # print('finish forward!')
                 batch_node_idxs = node_idx_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
-                ## 2. loss calculation
                 loss = self.loss(embedding_list, batch_node_idxs)
-                t3 = time.time()
-                print('loss calc time: ', t3 - t2, ' seconds!', ' loss = ', loss.item())
-                ## 3. backward propagation
                 loss.backward()
-                t4 = time.time()
-                print('backward time: ', t4 - t3, ' seconds!')
                 # gradient accumulation
-                if j == batch_num - 1:  # 重复多次前面的过程
-                    optimizer.step()  # 更新梯度
+                if j == batch_num - 1:
+                    optimizer.step()  # update gradient
                     model.zero_grad()
-                ## 4. weight optimization
-                optimizer.step()  # 更新参数
-                optimizer.zero_grad()  # 清零梯度缓存
-                torch.cuda.empty_cache()
-                if len(train_loss) > 0:
-                    if np.abs(train_loss[-1] - loss.item()) < 1e-12:
-                        flag = 1
-                        break
-                train_loss.append(loss.item())
-                t5 = time.time()
-                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t5 - t1, ' seconds!')
-            if flag:
-                break
-        en = time.time()
-        print('training total time: ',en - st, ' seconds!')
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                t2 = time.time()
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t2 - t1, ' seconds!')
+
         if export:
-            for i in range(len(embedding_list)):
-                embedding = embedding_list[i]
-                timestamp = self.timestamp_list[start_idx + i].split('.')[0]
-                df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+            if isinstance(embedding_list, list):
+                for i in range(len(embedding_list)):
+                    embedding = embedding_list[i]
+                    timestamp = self.timestamp_list[start_idx + i].split('.')[0]
+                    df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+                    embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                    df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+            else:
+                timestamp = self.timestamp_list[start_idx].split('.')[0]
+                df_export = pd.DataFrame(data=embedding_list.cpu().detach().numpy(), index=self.full_node_list)
                 embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
                 df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
-
         # 保存模型
         torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
-        return embedding_list
+        del adj_list, x_list, node_pair_list, neg_freq_list, embedding_list, model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        else:
+            gc.collect()
+        en = time.time()
+        print('training total time: ',en - st, ' seconds!')
+        return
 
 def static_embedding():
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/facebook/RWT-GCN'))
+    dataset = 'facebook'
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
     print(base_path)
     origin_folder = os.path.join('..', '1.format')
     embedding_folder = os.path.join('..', '2.embedding/GCN')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
-    t1 = time.time()
-    print('start GCN embedding!')
-    GCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='gcn_walk_pairs',
-                                   node_freq_folder='gcn_node_freq', walk_tensor_folder='', embedding_folder=embedding_folder,
-                                   node_file=node_file, origin_folder=origin_folder, model_folder='model',
-                                   output_dim=128, hid_num=500, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type = 'GCN', bias=True)
-    timestamp_num = len(GCN.timestamp_list)
-    for idx in range(timestamp_num):
-        GCN.learn_embedding(epoch=50, batch_size=4096 * 7, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
-    t2 = time.time()
-    print('finish GCN embedding! cost time: ', t2 - t1, ' seconds!')
+    # t1 = time.time()
+    # print('start GCN embedding!')
+    # GCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='gcn_walk_pairs',
+    #                                node_freq_folder='gcn_node_freq', walk_tensor_folder='', embedding_folder=embedding_folder,
+    #                                node_file=node_file, origin_folder=origin_folder, model_folder='model',
+    #                                output_dim=128, hid_num=500, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type = 'GCN', bias=True)
+    # timestamp_num = len(GCN.timestamp_list)
+    # for idx in range(timestamp_num):
+    #     GCN.learn_embedding(epoch=50, batch_size=4096 * 6, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
+    # t2 = time.time()
+    # print('finish GCN embedding! cost time: ', t2 - t1, ' seconds!')
+
     separate()
     t1 = time.time()
     print('start MRGCN embedding!')
     embedding_folder = os.path.join('..', '2.embedding/MRGCN')
-    MRGCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='walk_pairs',
-                                    node_freq_folder='node_freq', walk_tensor_folder="walk_tensor", embedding_folder=embedding_folder,
+    MRGCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='mrgcn_walk_pairs',
+                                    node_freq_folder='mrgcn_node_freq', walk_tensor_folder="mrgcn_walk_tensor", embedding_folder=embedding_folder,
                                     node_file=node_file, origin_folder='', model_folder='model',
                                     output_dim=128, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type='MRGCN', bias=True)
     timestamp_num = len(MRGCN.timestamp_list)
     for idx in range(timestamp_num):
-        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 6, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
+        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 4, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
     t2 = time.time()
     print('finish MRGCN embedding! cost time: ', t2 - t1, ' seconds!')
 

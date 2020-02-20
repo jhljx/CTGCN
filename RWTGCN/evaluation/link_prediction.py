@@ -4,7 +4,7 @@ import os, time, sys, multiprocessing
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 sys.path.append("..")
-from RWTGCN.utils import file_cmp, check_and_make_path
+from RWTGCN.utils import check_and_make_path
 
 class DataGenerator(object):
     base_path: str
@@ -166,7 +166,7 @@ class LinkPredictor(object):
         for measure in measure_list:
             models = []
             for C in [0.01, 0.1, 1, 10]:
-                model = LogisticRegression(C=C, solver='lbfgs', max_iter=1000, class_weight='balanced')
+                model = LogisticRegression(C=C, solver='lbfgs', max_iter=5000, class_weight='balanced')
                 model.fit(train_feature_dict[measure], train_labels)
                 models.append(model)
             best_auc = 0
@@ -201,7 +201,7 @@ class LinkPredictor(object):
         return auc_list
 
     def link_prediction_all_time(self, method):
-        f_list = sorted(os.listdir(self.edge_base_path), cmp=file_cmp)
+        f_list = sorted(os.listdir(self.edge_base_path))
         f_num = len(f_list)
 
         # model_dict = dict()
@@ -209,13 +209,15 @@ class LinkPredictor(object):
         for i, f_name in enumerate(f_list):
             if i == 0:
                 continue
-            print('Current date is :{}'.format(f_name))
+            print('Current date is: {}'.format(f_name))
             date = f_name.split('.')[0]
             train_edges = pd.read_csv(os.path.join(self.lp_edge_base_path, date + '_train.csv'), sep='\t').values
             val_edges = pd.read_csv(os.path.join(self.lp_edge_base_path, date + '_val.csv'), sep='\t').values
             test_edges = pd.read_csv(os.path.join(self.lp_edge_base_path, date + '_test.csv'), sep='\t').values
             pre_f_name = f_list[i - 1]
             #print('pre_f_name: ', f_list[i - 1], ', f_name: ', f_name)
+            if not os.path.exists(os.path.join(self.embedding_base_path, method, pre_f_name)):
+                continue
             df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, pre_f_name), sep='\t', index_col=0)
             df_embedding  = df_embedding.loc[self.full_node_list]
             node_num = len(self.full_node_list)
@@ -228,6 +230,7 @@ class LinkPredictor(object):
             all_auc_list.append(auc_list)
 
         df_output = pd.DataFrame(all_auc_list, columns=['date', 'Avg', 'Had', 'L1', 'L2'])
+        print(df_output)
         output_file_path = os.path.join(self.output_base_path, method + '_auc_record.csv')
         df_output.to_csv(output_file_path, sep=',', index=False)
 
@@ -253,16 +256,17 @@ class LinkPredictor(object):
 
 
 if __name__ == '__main__':
-    data_generator = DataGenerator(base_path="../../data/math", input_folder="1.format",
+    dataset = 'facebook'
+    data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
                                    output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
-    #data_generator.generate_edge_samples()
+    # data_generator.generate_edge_samples()
 
-    link_predictor = LinkPredictor(base_path="../../data/math", edge_folder='1.format', embedding_folder="2.embedding",
+    link_predictor = LinkPredictor(base_path="../../data/" + dataset, edge_folder='1.format', embedding_folder="2.embedding",
                                    lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
                                    train_ratio=1.0, test_ratio=1.0)
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
-    #method_list = ['timers']
+    #method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
+    method_list = ['MRGCN']
     t1 = time.time()
-    link_predictor.link_prediction_all_method(method_list=method_list, worker=5)
+    link_predictor.link_prediction_all_method(method_list=method_list, worker=-1)
     t2 = time.time()
     print('link prediction cost time: ', t2 - t1, ' seconds!')

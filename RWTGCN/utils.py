@@ -66,8 +66,12 @@ def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
 def normalize(mx):
     """Row-normalize sparse matrix"""
     rowsum = np.array(mx.sum(1))
-    r_inv = np.power(rowsum, -1).flatten()
-    r_inv[np.isinf(r_inv)] = 0.
+    def inv(x):
+        if x == 0:
+            return x
+        return 1 / x
+    inv_func = np.vectorize(inv)
+    r_inv = inv_func(rowsum).flatten()
     r_mat_inv = sp.diags(r_inv)
     mx = r_mat_inv.dot(mx)
     return mx
@@ -75,8 +79,7 @@ def normalize(mx):
 def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     """Convert a scipy sparse matrix to a torch sparse tensor."""
     sparse_mx = sparse_mx.tocoo().astype(np.float32)
-    indices = torch.from_numpy(
-        np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
+    indices = torch.from_numpy(np.vstack((sparse_mx.row, sparse_mx.col)).astype(np.int64))
     values = torch.from_numpy(sparse_mx.data)
     shape = torch.Size(sparse_mx.shape)
     return torch.sparse.FloatTensor(indices, values, shape)
@@ -113,13 +116,11 @@ def wl_transform(spadj, labels, cluster=False):
     import RWTGCN.preprocessing.helper as helper
     return helper.uniquetol(signatures, cluster=cluster)
 
-def separate(info='', sep='=', num=5):
-    print()
+def separate(info='', sep='=', num=8):
     if len(info) == 0:
         print(sep * (2 * num))
     else:
         print(sep * num, info, sep * num)
-    print()
 
 if __name__ == '__main__':
     A = np.array([[0, 1, 1, 1, 1],

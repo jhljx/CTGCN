@@ -52,6 +52,7 @@ class GatedGraphConvolution(nn.Module):
             trans = torch.mm(input, self.w2)
             gate = torch.mm(input, self.w3)
         output = torch.sparse.mm(adj, support)
+        del support
         if self.b1 is not None:
             output += self.b1
         if self.b2 is not None:
@@ -87,6 +88,7 @@ class GraphConvolution(nn.Module):
     def forward(self, input, adj):
         support = torch.mm(input, self.weight)
         output = torch.spmm(adj, support)
+        del support
         if self.bias is not None:
             return output + self.bias
         else:

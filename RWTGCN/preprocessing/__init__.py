@@ -29,12 +29,13 @@ class Processing:
 
 def main():
     worker = 30
+    dataset = 'math'
 
     # only random walk on original graph(data for GCN static embedding)
     # prob = 1
     t1 = time.time()
     print('start gcn preprocessing!')
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/facebook/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
     processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder = 'gcn_walk_pairs',

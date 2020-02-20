@@ -34,13 +34,13 @@ class MRGCN(nn.Module):
             hx_list, xi = [], x[0]
             for i in range(self.layer_num):
                 xi = self.gc_list[i](xi, adj_list[i])
-                xi = F.dropout(xi, self.dropout, training=self.training)
+                # xi = F.dropout(xi, self.dropout, training=self.training)
             hx_list.append(xi)
             return hx_list
         # x is a sparse matrix, adj is a list (component of RWTGCN)
         for i in range(self.layer_num):
             x = self.gc_list[i](x, adj_list[i])
-            x = F.dropout(x, self.dropout, training=self.training)
+            # x = F.dropout(x, self.dropout, training=self.training)
         return x
 
 class GCN(nn.Module):
@@ -105,7 +105,7 @@ class GCGRUCell(nn.Module):
         resetgate = torch.sigmoid(i_r + h_r)
         inputgate = torch.sigmoid(i_i + h_i)
         newgate = torch.tanh(i_n + (resetgate * h_n))
-
+        del i_r, i_i, i_n, h_r, h_i, h_n
         hy = newgate + inputgate * (hidden - newgate)
         return hy
 
@@ -147,6 +147,7 @@ class GCLSTMCell(nn.Module):
 
         cy = torch.mul(cx, forgetgate) + torch.mul(ingate, cellgate)
         hy = torch.mul(outgate, torch.tanh(cy))
+        del ingate, forgetgate, cellgate, outgate
         return hy, cy
 
 class RWTGCN(nn.Module):
