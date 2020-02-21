@@ -231,6 +231,7 @@ class LinkPredictor(object):
 
         df_output = pd.DataFrame(all_auc_list, columns=['date', 'Avg', 'Had', 'L1', 'L2'])
         print(df_output)
+        print('average AUC of Had: ', df_output['Had'].mean())
         output_file_path = os.path.join(self.output_base_path, method + '_auc_record.csv')
         df_output.to_csv(output_file_path, sep=',', index=False)
 

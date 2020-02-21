@@ -5,12 +5,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class GatedGraphConvolution(nn.Module):
+    node_num: int
     input_dim: int
     output_dim: int
     bias: bool
 
-    def __init__(self, input_dim, output_dim, bias=True):
+    def __init__(self, node_num, input_dim, output_dim, bias=True):
         super(GatedGraphConvolution, self).__init__()
+        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
         # linear transformation parameter
@@ -18,6 +20,7 @@ class GatedGraphConvolution(nn.Module):
         self.w2 = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
         # transform gate
         self.w3 = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
+        self.epsilo = nn.Parameter(torch.FloatTensor(1))
         if bias:
             self.b1 = nn.Parameter(torch.FloatTensor(output_dim))
             self.b2 = nn.Parameter(torch.FloatTensor(output_dim))
@@ -30,6 +33,7 @@ class GatedGraphConvolution(nn.Module):
 
     def reset_parameters(self):
         stdv = 1 / math.sqrt(self.output_dim)
+        self.epsilo.data.uniform_(1, 2)
         self.w1.data.uniform_(-stdv, stdv)
         self.w2.data.uniform_(-stdv, stdv)
         self.w3.data.uniform_(-stdv, stdv)
@@ -51,7 +55,7 @@ class GatedGraphConvolution(nn.Module):
             support = torch.mm(input, self.w1)
             trans = torch.mm(input, self.w2)
             gate = torch.mm(input, self.w3)
-        output = torch.sparse.mm(adj, support)
+        output = torch.sparse.mm(adj, support) + self.epsilo * support
         del support
         if self.b1 is not None:
             output += self.b1
@@ -61,6 +65,7 @@ class GatedGraphConvolution(nn.Module):
             gate += self.b3
         gate = torch.sigmoid(gate)
         output = F.relu(output)
+        #return trans + output
         return trans + gate * (output - trans)
 
 class GraphConvolution(nn.Module):

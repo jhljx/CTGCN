@@ -7,14 +7,16 @@ import torch.nn.functional as F
 from RWTGCN.layers import GatedGraphConvolution, GraphConvolution
 
 class MRGCN(nn.Module):
+    node_num: int
     input_dim: int
     output_dim: int
     layer_num: int
     dropout: float
     bias: bool
 
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
+    def __init__(self, node_num, input_dim, output_dim, layer_num, dropout, bias=True):
         super(MRGCN, self).__init__()
+        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.layer_num = layer_num
@@ -22,9 +24,9 @@ class MRGCN(nn.Module):
         self.bias = bias
 
         self.gc_list = nn.ModuleList()
-        self.gc_list.append(GatedGraphConvolution(input_dim, output_dim, bias=bias))
+        self.gc_list.append(GatedGraphConvolution(node_num, input_dim, output_dim, bias=bias))
         for i in range(1, layer_num):
-            self.gc_list.append(GatedGraphConvolution(output_dim, output_dim, bias=bias))
+            self.gc_list.append(GatedGraphConvolution(node_num, output_dim, output_dim, bias=bias))
 
     def forward(self, x, adj_list):
         assert self.layer_num == len(adj_list)
@@ -151,6 +153,7 @@ class GCLSTMCell(nn.Module):
         return hy, cy
 
 class RWTGCN(nn.Module):
+    node_num: int
     input_dim: int
     output_dim: int
     dropout: float
@@ -159,8 +162,9 @@ class RWTGCN(nn.Module):
     layer_num: int
     bias: bool
 
-    def __init__(self, input_dim, output_dim, layer_num, dropout, duration, unit_type='GRU', bias=True):
+    def __init__(self, node_num, input_dim, output_dim, layer_num, dropout, duration, unit_type='GRU', bias=True):
         super(RWTGCN, self).__init__()
+        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.dropout = dropout

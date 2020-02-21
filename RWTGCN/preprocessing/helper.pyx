@@ -59,7 +59,8 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
                         node_count_dict[from_id] = node_count_dict.get(from_id, 0) + 1
                         node_count_dict[to_id] = node_count_dict.get(to_id, 0) + 1
                         all_count_list[j - i] += 2
-                    walk_pair_set.add(edge)
+                    if j - i <= 2:
+                        walk_pair_set.add(edge)
                     node_freq_arr[from_id] += 1
                     node_freq_arr[to_id] += 1
 
@@ -92,13 +93,14 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
             edge_dict = walk_adj_list[idx]
             node_count_dict = node_count_list[idx]
             all_count = all_count_list[idx]
-            for edge, cnt in edge_dict.items():
-                from_id = edge[0]
-                to_id = edge[1]
-                res = log(cnt * all_count / (node_count_dict[from_id] * node_count_dict[to_id]))
-                edge_dict[edge] = res if res > 0 else res
+            # for edge, cnt in edge_dict.items():
+            #     from_id = edge[0]
+            #     to_id = edge[1]
+            #     res = log(cnt * all_count / (node_count_dict[from_id] * node_count_dict[to_id]))
+            #     edge_dict[edge] = res if res > 0 else res
             edge_arr = np.array(list(edge_dict.keys()))
-            weight_arr = np.array(list(edge_dict.values()))
+            # weight_arr = np.array(list(edge_dict.values()))
+            weight_arr = np.ones(edge_arr.shape[0], dtype=np.int)
             spmat = sp.coo_matrix((weight_arr, (edge_arr[:,0], edge_arr[:,1])), shape=(node_num, node_num))
             sp.save_npz(os.path.join(tensor_dir_path, str(idx) + ".npz"), spmat)
         t5 = time.time()

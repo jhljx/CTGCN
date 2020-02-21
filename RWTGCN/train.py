@@ -95,14 +95,14 @@ class DynamicEmbedding:
             self.walk_len = len(
                 os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
             print('walk_len: ', self.walk_len)
-            self.model = RWTGCN(self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, duration=self.duration,
+            self.model = RWTGCN(self.node_num, self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, duration=self.duration,
                                 unit_type=self.unit_type, bias=self.bias)
         elif self.gcn_type == 'MRGCN':
             assert self.duration == 1  # duration must be 1 when calling static embeding
             self.walk_len = len(
                 os.listdir(os.path.join(self.walk_tensor_base_path, os.listdir(self.walk_tensor_base_path)[0])))
             print('walk_len: ', self.walk_len)
-            self.model = MRGCN(self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, bias=self.bias)
+            self.model = MRGCN(self.node_num, self.node_num, self.output_dim, self.walk_len, dropout=self.dropout, bias=self.bias)
         elif self.gcn_type == 'GCN':
             assert self.duration == 1  # duration must be 1 when calling static embeding
             self.model = GCN(self.node_num, self.hid_num, self.output_dim, dropout=self.dropout, bias=self.bias)
