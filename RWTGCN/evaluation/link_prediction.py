@@ -152,7 +152,7 @@ class LinkPredictor(object):
         #print('Start training!')
         train_edge_num = train_edges.shape[0]
         if self.train_ratio < 1.0:
-            print('train ratio < 1. 0')
+            # print('train ratio < 1. 0')
             sample_num = int(train_edge_num * self.ratio)
             sampled_idxs = np.random.choice(np.arange(train_edge_num), sample_num).tolist()
             train_edges = train_edges[sampled_idxs, :]
@@ -186,7 +186,7 @@ class LinkPredictor(object):
         #print('Start testing!')
         test_edge_num = test_edges.shape[0]
         if self.test_ratio < 1.0:
-            print('test ratio < 1. 0')
+            # print('test ratio < 1. 0')
             sample_num = int(test_edge_num * self.ratio)
             sampled_idxs = np.random.choice(np.arange(test_edge_num), sample_num).tolist()
             test_edges = test_edges[sampled_idxs, :]
@@ -201,6 +201,7 @@ class LinkPredictor(object):
         return auc_list
 
     def link_prediction_all_time(self, method):
+        print('method = ', method)
         f_list = sorted(os.listdir(self.edge_base_path))
         f_num = len(f_list)
 
@@ -231,7 +232,7 @@ class LinkPredictor(object):
 
         df_output = pd.DataFrame(all_auc_list, columns=['date', 'Avg', 'Had', 'L1', 'L2'])
         print(df_output)
-        print('average AUC of Had: ', df_output['Had'].mean())
+        print('method = ', method, ', average AUC of Had: ', df_output['Had'].mean())
         output_file_path = os.path.join(self.output_base_path, method + '_auc_record.csv')
         df_output.to_csv(output_file_path, sep=',', index=False)
 
@@ -257,7 +258,7 @@ class LinkPredictor(object):
 
 
 if __name__ == '__main__':
-    dataset = 'facebook'
+    dataset = 'math'
     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
                                    output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
     # data_generator.generate_edge_samples()
@@ -265,8 +266,11 @@ if __name__ == '__main__':
     link_predictor = LinkPredictor(base_path="../../data/" + dataset, edge_folder='1.format', embedding_folder="2.embedding",
                                    lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
                                    train_ratio=1.0, test_ratio=1.0)
-    #method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
-    method_list = ['MRGCN']
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
+    method_list = ['dyGEM']
+    # for neg_num in [10, 20, 50, 80, 100, 150, 200]:
+    #     for Q in [0, 10, 20, 50, 100, 200, 500, 1000]:
+    #         method_list.append('MRGCN_neg_' + str(neg_num) + '_Q_' + str(Q))
     t1 = time.time()
     link_predictor.link_prediction_all_method(method_list=method_list, worker=-1)
     t2 = time.time()

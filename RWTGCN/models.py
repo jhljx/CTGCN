@@ -33,9 +33,9 @@ class MRGCN(nn.Module):
         # MRGCN for static embedding
         if isinstance(x, list):
             assert len(x) == 1
-            hx_list, xi = [], x[0]
+            hx_list, xi, res_xi  = [], x[0], x[0]
             for i in range(self.layer_num):
-                xi = self.gc_list[i](xi, adj_list[i])
+                xi, res_xi  = self.gc_list[i](xi, res_xi, adj_list[i])
                 # xi = F.dropout(xi, self.dropout, training=self.training)
             hx_list.append(xi)
             return hx_list

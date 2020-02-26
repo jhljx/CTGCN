@@ -20,15 +20,18 @@ class GatedGraphConvolution(nn.Module):
         self.w2 = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
         # transform gate
         self.w3 = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
+        self.w4 = nn.Parameter(torch.FloatTensor(output_dim, output_dim))
         self.epsilo = nn.Parameter(torch.FloatTensor(1))
         if bias:
             self.b1 = nn.Parameter(torch.FloatTensor(output_dim))
             self.b2 = nn.Parameter(torch.FloatTensor(output_dim))
             self.b3 = nn.Parameter(torch.FloatTensor(output_dim))
+            self.b4 = nn.Parameter(torch.FloatTensor(output_dim))
         else:
             self.register_parameter('b1', None)
             self.register_parameter('b2', None)
             self.register_parameter('b3', None)
+            self.register_parameter('b4', None)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -37,42 +40,51 @@ class GatedGraphConvolution(nn.Module):
         self.w1.data.uniform_(-stdv, stdv)
         self.w2.data.uniform_(-stdv, stdv)
         self.w3.data.uniform_(-stdv, stdv)
+        self.w4.data.uniform_(-stdv, stdv)
         if self.b1 is not None:
             self.b1.data.uniform_(-stdv, stdv)
         if self.b2 is not None:
             self.b2.data.uniform_(-stdv, stdv)
         if self.b3 is not None:
             self.b3.data.uniform_(-stdv, stdv)
+        if self.b4 is not None:
+            self.b4.data.uniform_(-stdv, stdv)
 
-    def forward(self, input, adj):
+    def forward(self, input, res_input, adj):
         # sparse tensor
         if input.layout == torch.sparse_coo:
             support = torch.sparse.mm(input, self.w1)
-            trans = torch.sparse.mm(input, self.w2)
-            gate = torch.sparse.mm(input, self.w3)
+            trans = torch.sparse.mm(res_input, self.w2)
+            gate1 = torch.sparse.mm(input, self.w3)
         # dense tensor
         else:
             support = torch.mm(input, self.w1)
-            trans = torch.mm(input, self.w2)
-            gate = torch.mm(input, self.w3)
+            trans = torch.mm(res_input, self.w2)
+            gate1 = torch.mm(input, self.w3)
+        if self.b2 is not None:
+            trans += self.b2
+        if self.b3 is not None:
+            gate1 += self.b3
+        # gate1 = torch.sigmoid(gate1)
         output = torch.sparse.mm(adj, support) + self.epsilo * support
         del support
         if self.b1 is not None:
             output += self.b1
-        if self.b2 is not None:
-            trans += self.b2
-        if self.b3 is not None:
-            gate += self.b3
-        gate = torch.sigmoid(gate)
         output = F.relu(output)
+        trans = torch.sigmoid(trans)
+        gate2 = torch.mm(output, self.w4)
+        if self.b4 is not None:
+            gate2 += self.b4
+        # gate2 = torch.sigmoid(gate2)
+        gate = torch.sigmoid(gate1 + gate2)
+        #return output
         #return trans + output
-        return trans + gate * (output - trans)
+        # return torch.cat([trans, output], dim=1)
+        # return trans * output
+        #return gate1 * trans + gate2 * output
+        return output + gate * (trans - output),  trans + gate * (output - trans)
 
 class GraphConvolution(nn.Module):
-    """
-    Simple GCN layer, similar to https://arxiv.org/abs/1609.02907
-    """
-
     def __init__(self, in_features, out_features, bias=True):
         super(GraphConvolution, self).__init__()
         self.in_features = in_features

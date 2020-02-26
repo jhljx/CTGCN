@@ -46,7 +46,7 @@ class TensorGenerator:
         check_and_make_path(self.node_freq_base_path)
         check_and_make_path(self.walk_tensor_base_path)
 
-    def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=False):
+    def generate_tensor(self, f_name, original_graph_path, structural_graph_path, weight=True):
         import RWTGCN.preprocessing.helper as helper
         print('f_name = ', f_name)
 

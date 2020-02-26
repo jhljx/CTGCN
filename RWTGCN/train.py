@@ -11,6 +11,8 @@ from RWTGCN.models import GCN, MRGCN, RWTGCN
 from RWTGCN.utils import check_and_make_path, get_walk_neighbor_dict, get_normalize_adj_tensor, sparse_mx_to_torch_sparse_tensor
 from RWTGCN.utils import build_graph, get_sp_adj_mat, separate
 
+os.environ["CUDA_VISIBLE_DEVICES"] = '0,1,2,3'
+
 class DynamicEmbedding:
     base_path: str
     walk_pair_base_path: str
@@ -115,16 +117,9 @@ class DynamicEmbedding:
             original_graph_path = os.path.join(self.origin_base_path, date_dir_list[start_idx])
             date_adj_list = []
             spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
-            #t2 = time.time()
-            # print('get sparse adj time: ', t2 - t1, ' seconds!')
             sptensor = get_normalize_adj_tensor(spmat)
-            #t3 = time.time()
-            # print('sparse matrix to sparse tensor time: ', t3 - t2, ' seconds!')
             if torch.cuda.is_available():
-                # t1 = time.time()
                 date_adj_list.append(sptensor.cuda())
-                # t2 = time.time()
-                # print('move cuda sparse adj time: ', t2 - t1, ' seconds!')
             else:
                 date_adj_list.append(sptensor)
             return date_adj_list
@@ -141,6 +136,9 @@ class DynamicEmbedding:
             for i, f_name in enumerate(f_list):
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
                 sptensor = get_normalize_adj_tensor(spmat)
+                # original_graph_path = os.path.join(self.origin_base_path, date_dir_list[start_idx] + '.csv')
+                # spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
+                # sptensor = get_normalize_adj_tensor(spmat)
                 if self.gcn_type == 'RWTGCN':
                     adj_list = tmp_adj_list
                 else: # MRGCN
@@ -262,17 +260,19 @@ def static_embedding():
     # t2 = time.time()
     # print('finish GCN embedding! cost time: ', t2 - t1, ' seconds!')
 
-    separate()
-    t1 = time.time()
+    # separate()
+    # for neg_num in [10, 20, 50, 80, 100, 150, 200]:
+    #     for Q in [500, 1000]:
     print('start MRGCN embedding!')
-    embedding_folder = os.path.join('..', '2.embedding/MRGCN')
+    t1 = time.time()
+    embedding_folder = os.path.join('..', '2.embedding/MRGCN_sigmoid_1_return')
     MRGCN = DynamicEmbedding(base_path=base_path, walk_pair_folder='mrgcn_walk_pairs',
                                     node_freq_folder='mrgcn_node_freq', walk_tensor_folder="mrgcn_walk_tensor", embedding_folder=embedding_folder,
-                                    node_file=node_file, origin_folder='', model_folder='model',
-                                    output_dim=128, dropout=0.5, duration=1, neg_num=20, Q=10, gcn_type='MRGCN', bias=True)
+                                    node_file=node_file, origin_folder=origin_folder, model_folder='model',
+                                    output_dim=128, dropout=0.5, duration=1, neg_num=150, Q=10, gcn_type='MRGCN', bias=True)
     timestamp_num = len(MRGCN.timestamp_list)
-    for idx in range(timestamp_num):
-        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 4, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn', export=True)
+    for idx in range(0, timestamp_num):
+        MRGCN.learn_embedding(epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='mrgcn_sigmoid_1_return', export=True)
     t2 = time.time()
     print('finish MRGCN embedding! cost time: ', t2 - t1, ' seconds!')
 
