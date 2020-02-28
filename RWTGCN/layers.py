@@ -5,14 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class GatedGraphConvolution(nn.Module):
-    node_num: int
     input_dim: int
     output_dim: int
     bias: bool
 
-    def __init__(self, node_num, input_dim, output_dim, bias=True):
+    def __init__(self, input_dim, output_dim, bias=True):
         super(GatedGraphConvolution, self).__init__()
-        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
         # linear transformation parameter
@@ -52,6 +50,7 @@ class GatedGraphConvolution(nn.Module):
 
     def forward(self, input, res_input, adj):
         # sparse tensor
+        # print('input', input)
         if input.layout == torch.sparse_coo:
             support = torch.sparse.mm(input, self.w1)
             trans = torch.sparse.mm(res_input, self.w2)
@@ -77,7 +76,7 @@ class GatedGraphConvolution(nn.Module):
             gate2 += self.b4
         # gate2 = torch.sigmoid(gate2)
         gate = torch.sigmoid(gate1 + gate2)
-        #return output
+        # return output, trans
         #return trans + output
         # return torch.cat([trans, output], dim=1)
         # return trans * output

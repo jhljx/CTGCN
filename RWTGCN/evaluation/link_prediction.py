@@ -108,7 +108,8 @@ class DataGenerator(object):
 
 class LinkPredictor(object):
     base_path: str
-    edge_base_path: str
+    origin_base_path: str
+    origin_base_path: str
     embedding_base_path: str
     lp_edge_base_path: str
     output_base_path: str
@@ -116,9 +117,9 @@ class LinkPredictor(object):
     train_ratio: float
     test_ratio: float
 
-    def __init__(self, base_path, edge_folder, embedding_folder, lp_edge_folder, output_folder, node_file, train_ratio=1.0, test_ratio=1.0):
+    def __init__(self, base_path, origin_folder, embedding_folder, lp_edge_folder, output_folder, node_file, train_ratio=1.0, test_ratio=1.0):
         self.base_path = base_path
-        self.edge_base_path = os.path.join(base_path, edge_folder)
+        self.origin_base_path = os.path.join(base_path, origin_folder)
         self.embedding_base_path = os.path.join(base_path, embedding_folder)
         self.lp_edge_base_path = os.path.join(base_path, lp_edge_folder)
         self.output_base_path = os.path.join(base_path, output_folder)
@@ -129,7 +130,7 @@ class LinkPredictor(object):
         self.full_node_list = nodes_set['node'].tolist()
 
         check_and_make_path(self.embedding_base_path)
-        check_and_make_path(self.edge_base_path)
+        check_and_make_path(self.origin_base_path)
         check_and_make_path(self.output_base_path)
         return
 
@@ -202,7 +203,7 @@ class LinkPredictor(object):
 
     def link_prediction_all_time(self, method):
         print('method = ', method)
-        f_list = sorted(os.listdir(self.edge_base_path))
+        f_list = sorted(os.listdir(self.origin_base_path))
         f_num = len(f_list)
 
         # model_dict = dict()
@@ -258,16 +259,16 @@ class LinkPredictor(object):
 
 
 if __name__ == '__main__':
-    dataset = 'math'
+    dataset = 'enron'
     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
                                    output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
     # data_generator.generate_edge_samples()
 
-    link_predictor = LinkPredictor(base_path="../../data/" + dataset, edge_folder='1.format', embedding_folder="2.embedding",
+    link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                    lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
                                    train_ratio=1.0, test_ratio=1.0)
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
-    method_list = ['dyGEM']
+    # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
+    method_list = ['RWTGCN_prob_1']
     # for neg_num in [10, 20, 50, 80, 100, 150, 200]:
     #     for Q in [0, 10, 20, 50, 100, 200, 500, 1000]:
     #         method_list.append('MRGCN_neg_' + str(neg_num) + '_Q_' + str(Q))

@@ -28,45 +28,46 @@ class Processing:
         print('tensor generation time: ', t3 - t2, ' seconds.')
 
 def main():
-    worker = 30
+    worker = 40
     dataset = 'facebook'
 
     # only random walk on original graph(data for GCN static embedding)
     # prob = 1
 
-    t1 = time.time()
-    print('start gcn preprocessing!')
+    # t1 = time.time()
+    # print('start evolvegcn preprocessing!')
     base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
-    processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder = 'gcn_walk_pairs',
-                            node_freq_folder='gcn_node_freq', walk_tensor_folder='', node_file=node_file,
-                            hop=5, max_neighbor_num=50, walk_time=50, walk_length=2, prob=1)
-    processing.run(worker=worker)
-    t2 = time.time()
-    print('finish gcn preprocessing! total cost time:', t2 - t1, ' seconds!')
-
-    t1 = time.time()
-    print('start mrgcn preprocessing!')
-    # random walk on original graph(data for MRGCN static embedding
-    # prob = 1
-    processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder='mrgcn_walk_pairs',
-                            node_freq_folder='mrgcn_node_freq', walk_tensor_folder="mrgcn_walk_tensor", node_file=node_file,
-                            hop=5, max_neighbor_num=20, walk_time=10, walk_length=5, prob=1)
-    processing.run(worker=worker)
-    t2 = time.time()
-    print('finish mrgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
-
-    # t1 = time.time()
-    # #random walk on both original graph and structural graph for RWTGCN dynamic embedding
-    # # 0 < prob < 1
-    # processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='structural_network',
-    #                         walk_pair_folder='walk_pairs', node_freq_folder='node_freq',
-    #                         walk_tensor_folder="walk_tensor", node_file=node_file,
-    #                         hop=5, max_neighbor_num=20, walk_time=10, walk_length=5, prob=0.5)
+    # processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder = 'evolvegcn_walk_pairs',
+    #                         node_freq_folder='evolvegcn_node_freq', walk_tensor_folder='', node_file=node_file,
+    #                         hop=5, max_neighbor_num=50, walk_time=50, walk_length=2, prob=1)
     # processing.run(worker=worker)
     # t2 = time.time()
-    # print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
+    # print('finish evolvegcn preprocessing! total cost time:', t2 - t1, ' seconds!')
+    #
+    # t1 = time.time()
+    # print('start mrgcn preprocessing!')
+    # # random walk on original graph(data for MRGCN static embedding
+    # # prob = 1
+    # processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='', walk_pair_folder='mrgcn_walk_pairs',
+    #                         node_freq_folder='mrgcn_node_freq', walk_tensor_folder="mrgcn_walk_tensor", node_file=node_file,
+    #                         hop=5, max_neighbor_num=20, walk_time=10, walk_length=5, prob=1)
+    # processing.run(worker=worker)
+    # t2 = time.time()
+    # print('finish mrgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
+
+    t1 = time.time()
+    #random walk on both original graph and structural graph for RWTGCN dynamic embedding
+    # 0 < prob < 1
+    for prob in [0, 0.2, 0.5, 0.8, 1]:
+        processing = Processing(base_path=base_path, origin_folder=origin_folder, structure_folder='structural_network',
+                                walk_pair_folder='rwtgcn_' + str(prob) + '_walk_pairs', node_freq_folder='rwtgcn_' + str(prob) + '_node_freq',
+                                walk_tensor_folder='rwtgcn_' + str(prob) + '_walk_tensor', node_file=node_file,
+                                hop=5, max_neighbor_num=5, walk_time=10, walk_length=5, prob=prob)
+        processing.run(worker=worker)
+    t2 = time.time()
+    print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
     main()

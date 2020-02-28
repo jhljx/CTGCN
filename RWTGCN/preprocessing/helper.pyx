@@ -196,7 +196,7 @@ def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path
     while max_walk_len > 0:
         max_walk_len /= 10
         max_bit += 1
-    format_str = ':0>' + str(max_bit) + 'd}'
+    format_str = '{:0>' + str(max_bit) + 'd}'
 
     for idx in range(1, walk_len):
         edge_dict = walk_adj_list[idx]
@@ -276,8 +276,9 @@ def get_structural_neighbors(color_arr, output_file, cluster_dict, cluster_len_d
         for j in range(sample_num):
             to_idx = sampled_nodes[j]
             to_node = idx2nid_dict[to_idx]
-            key = (from_node, to_node)
-            if from_node == to_node or key in structural_edges_dict:
+            edge = (from_node, to_node)
+            reverse_edge = (to_node, from_node)
+            if from_node == to_node or edge in structural_edges_dict or reverse_edge in structural_edges_dict:
                 continue
             to_arr = color_arr[to_idx, :]
             weight = sigmoid(row_arr.dot(to_arr))

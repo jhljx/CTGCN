@@ -1,32 +1,28 @@
 import sys
 sys.path.append("..")
-import torch
+import torch, math
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 from RWTGCN.layers import GatedGraphConvolution, GraphConvolution
 
 class MRGCN(nn.Module):
-    node_num: int
     input_dim: int
     output_dim: int
     layer_num: int
-    dropout: float
     bias: bool
 
-    def __init__(self, node_num, input_dim, output_dim, layer_num, dropout, bias=True):
+    def __init__(self, input_dim, output_dim, layer_num, bias=True):
         super(MRGCN, self).__init__()
-        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.layer_num = layer_num
-        self.dropout = dropout
         self.bias = bias
 
         self.gc_list = nn.ModuleList()
-        self.gc_list.append(GatedGraphConvolution(node_num, input_dim, output_dim, bias=bias))
+        self.gc_list.append(GatedGraphConvolution(input_dim, output_dim, bias=bias))
         for i in range(1, layer_num):
-            self.gc_list.append(GatedGraphConvolution(node_num, output_dim, output_dim, bias=bias))
+            self.gc_list.append(GatedGraphConvolution(output_dim, output_dim, bias=bias))
 
     def forward(self, x, adj_list):
         assert self.layer_num == len(adj_list)
@@ -35,13 +31,21 @@ class MRGCN(nn.Module):
             assert len(x) == 1
             hx_list, xi, res_xi  = [], x[0], x[0]
             for i in range(self.layer_num):
-                xi, res_xi  = self.gc_list[i](xi, res_xi, adj_list[i])
+                if torch.cuda.is_available():
+                    xi, res_xi  = self.gc_list[i](xi, res_xi, adj_list[i].cuda())
+                else:
+                    xi, res_xi = self.gc_list[i](xi, res_xi, adj_list[i])
                 # xi = F.dropout(xi, self.dropout, training=self.training)
             hx_list.append(xi)
             return hx_list
         # x is a sparse matrix, adj is a list (component of RWTGCN)
+        # print('x type: ', type(x))
+        res_x = x
         for i in range(self.layer_num):
-            x = self.gc_list[i](x, adj_list[i])
+            if torch.cuda.is_available():
+                x, res_x = self.gc_list[i](x, res_x, adj_list[i].cuda())
+            else:
+                x, res_x = self.gc_list[i](x, res_x, adj_list[i])
             # x = F.dropout(x, self.dropout, training=self.training)
         return x
 
@@ -73,19 +77,19 @@ class GCN(nn.Module):
 class GCGRUCell(nn.Module):
     input_dim: int
     output_dim: int
-    dropout: float
     bias: bool
 
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
+    def __init__(self, input_dim, output_dim, bias=True):
         super(GCGRUCell, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.dropout = dropout
         self.bias = bias
 
-        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
-        self.x2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
-        self.h2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
+        # self.gcn = GatedGraphConvolution(input_dim, output_dim, bias=bias)
+        # self.wx1 = nn.Parameter(torch.FloatTensor(input_dim, 3 * output_dim))
+
+        self.x2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
+        self.h2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -93,8 +97,8 @@ class GCGRUCell(nn.Module):
         for w in self.parameters():
             w.data.uniform_(-std, std)
 
-    def forward(self, x, adj_list, hidden):
-        x = self.gcn(x, adj_list)
+    def forward(self, x, hidden):
+        # x, res_x = self.gcn(x, res_x, adj)
         gate_x = self.x2h(x)
         gate_h = self.h2h(hidden)
 
@@ -109,23 +113,22 @@ class GCGRUCell(nn.Module):
         newgate = torch.tanh(i_n + (resetgate * h_n))
         del i_r, i_i, i_n, h_r, h_i, h_n
         hy = newgate + inputgate * (hidden - newgate)
-        return hy
+        # hy, res_x = self.gcn(hy, res_x, adj)
+        return hy# , res_x
 
 
 class GCLSTMCell(nn.Module):
     input_dim: int
     output_dim: int
-    dropout: float
     bias: bool
 
-    def __init__(self, input_dim, output_dim, layer_num, dropout, bias=True):
+    def __init__(self, input_dim, output_dim, bias=True):
         super(GCLSTMCell, self).__init__()
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.dropout = dropout
         self.bias = bias
 
-        self.gcn = MRGCN(input_dim, output_dim, layer_num, dropout, bias=bias)
+        self.gcn = MRGCN(input_dim, output_dim, layer_num, bias=bias)
         self.x2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
         self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
         self.reset_parameters()
@@ -153,40 +156,43 @@ class GCLSTMCell(nn.Module):
         return hy, cy
 
 class RWTGCN(nn.Module):
-    node_num: int
     input_dim: int
     output_dim: int
-    dropout: float
     unit_type: str
     duration: int
     layer_num: int
     bias: bool
 
-    def __init__(self, node_num, input_dim, output_dim, layer_num, dropout, duration, unit_type='GRU', bias=True):
+    def __init__(self, input_dim, output_dim, layer_num, duration, unit_type='GRU', bias=True):
         super(RWTGCN, self).__init__()
-        self.node_num = node_num
         self.input_dim = input_dim
         self.output_dim = output_dim
-        self.dropout = dropout
         self.unit_type = unit_type
         self.duration = duration
         self.layer_num = layer_num
         self.bias = bias
+        self.gcn_list = nn.ModuleList()
+        for i in range(self.duration):
+            self.gcn_list.append(MRGCN(input_dim, output_dim, layer_num,  bias=bias))
         if self.unit_type == 'GRU':
-            self.rnn_cell = GCGRUCell(input_dim, output_dim, layer_num, dropout, bias=bias)
+            self.rnn = GCGRUCell(output_dim, output_dim, bias=bias)
         elif self.unit_type == 'LSTM':
-            self.rnn_cell = GCLSTMCell(input_dim, output_dim, layer_num, dropout, bias=bias)
+            self.rnn = GCLSTMCell(output_dim, output_dim, bias=bias)
         else:
             raise AttributeError('unit type error!')
 
     def forward(self, x_list, adj_list):
-        assert (len(x_list) == self.duration) and (len(adj_list) == self.duration)
+        # assert (len(x_list) == self.duration) and (len(adj_list) == self.duration)
         if torch.cuda.is_available():
             h0 = Variable(torch.zeros(x_list[0].size()[1], self.output_dim).cuda())
         else:
             h0 = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
-        hx, hx_list = h0, []
+        hx_list = []
+        hx = h0
+        # prehx_list = [h0 for i in range(self.layer_num)]
         for i in range(len(x_list)):
-            hx = self.rnn_cell(x_list[i], adj_list[i], hx)
+            x = x_list[i].cuda() if torch.cuda.is_available() else x_list[i]
+            x = self.gcn_list[i](x, adj_list[i])
+            hx = self.rnn(x, hx)
             hx_list.append(hx)
         return hx_list

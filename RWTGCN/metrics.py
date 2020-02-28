@@ -50,6 +50,8 @@ class MainLoss(nn.Module):
                     node_idxs += [node_idx] * self.neg_sample_num
             assert len(node_idxs) <= len(batch_node_idxs) * self.neg_sample_num
             neg_idxs += random.sample(node_freq, self.neg_sample_num)
+            if len(node_idxs) == 0 or len(pos_idxs) == 0 or len(neg_idxs) == 0:
+                continue
             ######################
             # this block is quite important, otherwise the code will cause memory leak!
             node_idxs = torch.LongTensor(node_idxs)

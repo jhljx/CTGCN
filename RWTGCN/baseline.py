@@ -1,47 +1,43 @@
-import utils as u
 import torch
 from torch.nn.parameter import Parameter
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 
-
 class EvolveGCN(torch.nn.Module):
-    def __init__(self, args, activation, gcn_type='EGCNO', skipfeats=False):
+    def __init__(self, input_dim, hidden_dim, output_dim, egcn_type='EGCNO', skipfeats=False, bias=True):
         super().__init__()
-        GRCU_args = u.Namespace({})
-
-        feats = [args.feats_per_node,
-                 args.layer_1_feats,
-                 args.layer_2_feats]
-        if torch.cuda.is_available():
-            self.device = torch.device("cuda: 0")
-        else:
-            self.device = torch.device("cpu")
-        self.gcn_type = gcn_type
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.egcn_type = egcn_type
         self.skipfeats = skipfeats
-        self.GRCU_layers = []
-        self._parameters = nn.ParameterList()
-        for i in range(1, len(feats)):
-            GRCU_args = u.Namespace({'in_feats': feats[i - 1],
-                                     'out_feats': feats[i],
-                                     'activation': activation,
-                                     'gcn_type': self.gcn_type})
+        self.GRCU_layers = nn.ModuleList()
+        self.w = nn.Parameter(torch.FloatTensor(input_dim, hidden_dim))
+        if bias:
+            self.b = nn.Parameter(torch.FloatTensor(output_dim))
+        else:
+            self.register_parameter('b', None)
+        self.reset_parameters()
+        # print('1 layer')
+        self.GRCU_layers.append(GRCU(hidden_dim, output_dim, egcn_type))
+        # print('2 layer')
+        self.GRCU_layers.append(GRCU(hidden_dim, output_dim, egcn_type))
+        # print('finish')
 
-            grcu_i = GRCU(GRCU_args)
-            # print (i,'grcu_i', grcu_i)
-            self.GRCU_layers.append(grcu_i.to(self.device))
-            self._parameters.extend(list(self.GRCU_layers[-1].parameters()))
+    def reset_parameters(self):
+        stdv = 1 / math.sqrt(self.hidden_dim)
+        self.w.data.uniform_(-stdv, stdv)
+        if self.b is not None:
+            self.b.data.uniform_(-stdv, stdv)
 
-    def parameters(self):
-        return self._parameters
-
-    def forward(self, A_list, Nodes_list, nodes_mask_list):
+    def forward(self, A_list, Nodes_list, nodes_mask_list=None):
         node_feats = Nodes_list[-1]
 
         for unit in self.GRCU_layers:
-            if self.gcn_type == 'EGCNO':
+            if self.egcn_type == 'EGCNO':
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
-            elif self.gcn_type == 'EGCNH':
+            elif self.egcn_type == 'EGCNH':
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
             else:
                 raise Exception('Unsupported EvolveGCN type!')
@@ -51,18 +47,13 @@ class EvolveGCN(torch.nn.Module):
         return out
 
 class GRCU(torch.nn.Module):
-    def __init__(self, args):
+    def __init__(self, input_dim, output_dim, egcn_type='EGCNO'):
         super().__init__()
-        self.args = args
-        cell_args = u.Namespace({})
-        cell_args.rows = args.in_feats
-        cell_args.cols = args.out_feats
-        cell_args.gcn_type = args.gcn_type
-
-        self.evolve_weights = mat_GRU_cell(cell_args)
-        self.activation = self.args.activation
-        self.gcn_type = self.args.gcn_type
-        self.GCN_init_weights = Parameter(torch.Tensor(self.args.in_feats, self.args.out_feats))
+        print('start mat GRU')
+        self.evolve_weights = mat_GRU_cell(input_dim, output_dim, egcn_type)
+        print('finish mat GRU')
+        self.egcn_type = egcn_type
+        self.GCN_init_weights = Parameter(torch.FloatTensor(input_dim, output_dim))
         self.reset_param(self.GCN_init_weights)
 
     def reset_param(self, t):
@@ -76,41 +67,40 @@ class GRCU(torch.nn.Module):
         for t, Ahat in enumerate(A_list):
             node_embs = node_embs_list[t]
             # first evolve the weights from the initial and use the new weights with the node_embs
-            if self.gcn_type == 'EGCNO':
+            if self.egcn_type == 'EGCNO':
                 GCN_weights = self.evolve_weights(GCN_weights)
-            elif self.gcn_type == 'EGCNH':
+            elif self.egcn_type == 'EGCNH':
                 GCN_weights = self.evolve_weights(GCN_weights, node_embs, mask_list[t])
             else:
                 raise Exception('Unsupported EvolveGCN type!')
-            node_embs = self.activation(Ahat.matmul(node_embs.matmul(GCN_weights)))
+            node_embs = F.relu(Ahat.matmul(node_embs.matmul(GCN_weights)))
             out_seq.append(node_embs)
         return out_seq
 
 
 class mat_GRU_cell(torch.nn.Module):
-    def __init__(self, args):
+    def __init__(self, input_dim, output_dim, egcn_type='EGCNO'):
         super().__init__()
-        self.args = args
-        self.gcn_type = self.args.gcn_type
-        self.update = mat_GRU_gate(args.rows,
-                                   args.cols,
+        self.egcn_type = egcn_type
+        self.update = mat_GRU_gate(input_dim,
+                                   output_dim,
                                    torch.nn.Sigmoid())
 
-        self.reset = mat_GRU_gate(args.rows,
-                                  args.cols,
+        self.reset = mat_GRU_gate(input_dim,
+                                  output_dim,
                                   torch.nn.Sigmoid())
 
-        self.htilda = mat_GRU_gate(args.rows,
-                                   args.cols,
+        self.htilda = mat_GRU_gate(input_dim,
+                                   output_dim,
                                    torch.nn.Tanh())
 
-        self.choose_topk = TopK(feats=args.rows,
-                                k=args.cols)
+        self.choose_topk = TopK(feats=input_dim,
+                                k=output_dim)
 
     def forward(self, prev_Q, prev_Z=None, mask=None):
-        if self.gcn_type == 'EGCNO':
+        if self.egcn_type == 'EGCNO':
             z_topk = prev_Q
-        elif self.gcn_type == 'EGCNH':
+        elif self.egcn_type == 'EGCNH':
             z_topk = self.choose_topk(prev_Z, mask)
         else:
             raise Exception('Unsupported EvolveGCN type!')
@@ -126,9 +116,9 @@ class mat_GRU_gate(torch.nn.Module):
         super().__init__()
         self.activation = activation
         # the k here should be in_feats which is actually the rows
-        self.W = Parameter(torch.Tensor(rows, rows))
+        self.W = Parameter(torch.FloatTensor(rows, rows))
         self.reset_param(self.W)
-        self.U = Parameter(torch.Tensor(rows, rows))
+        self.U = Parameter(torch.FloatTensor(rows, rows))
         self.reset_param(self.U)
         self.bias = Parameter(torch.zeros(rows, cols))
 
@@ -143,7 +133,7 @@ class mat_GRU_gate(torch.nn.Module):
 class TopK(torch.nn.Module):
     def __init__(self, feats, k):
         super().__init__()
-        self.scorer = Parameter(torch.Tensor(feats, 1))
+        self.scorer = Parameter(torch.FloatTensor(feats, 1))
         self.reset_param(self.scorer)
         self.k = k
 
