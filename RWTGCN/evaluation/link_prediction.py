@@ -54,7 +54,7 @@ class DataGenerator(object):
         print('Start generating edge samples!')
         node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
 
-        f_list = os.listdir(self.input_base_path)
+        f_list = sorted(os.listdir(self.input_base_path))
         for i, file in enumerate(f_list):
             # print('i = ', i, ', file = ', file)
             file_path = os.path.join(self.input_base_path, file)
@@ -222,9 +222,9 @@ class LinkPredictor(object):
                 continue
             df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, pre_f_name), sep='\t', index_col=0)
             df_embedding  = df_embedding.loc[self.full_node_list]
-            node_num = len(self.full_node_list)
-            for j in range(node_num):
-                assert df_embedding.index[j] == self.full_node_list[j]
+            # node_num = len(self.full_node_list)
+            # for j in range(node_num):
+            #     assert df_embedding.index[j] == self.full_node_list[j]
             embeddings = df_embedding.values
             #print('YES')
             model_dict = self.train(train_edges, val_edges, embeddings)
@@ -259,7 +259,7 @@ class LinkPredictor(object):
 
 
 if __name__ == '__main__':
-    dataset = 'enron'
+    dataset = 'facebook'
     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
                                    output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
     # data_generator.generate_edge_samples()

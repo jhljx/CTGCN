@@ -5,35 +5,20 @@ import torch.nn.functional as F
 import math
 
 class EvolveGCN(torch.nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, egcn_type='EGCNO', skipfeats=False, bias=True):
+    def __init__(self, input_dim, hidden_dim, output_dim, duration, egcn_type='EGCNH', skipfeats=False):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.duration = duration
         self.egcn_type = egcn_type
         self.skipfeats = skipfeats
         self.GRCU_layers = nn.ModuleList()
-        self.w = nn.Parameter(torch.FloatTensor(input_dim, hidden_dim))
-        if bias:
-            self.b = nn.Parameter(torch.FloatTensor(output_dim))
-        else:
-            self.register_parameter('b', None)
-        self.reset_parameters()
-        # print('1 layer')
+        self.GRCU_layers.append(GRCU(input_dim, hidden_dim, egcn_type))
         self.GRCU_layers.append(GRCU(hidden_dim, output_dim, egcn_type))
-        # print('2 layer')
-        self.GRCU_layers.append(GRCU(hidden_dim, output_dim, egcn_type))
-        # print('finish')
 
-    def reset_parameters(self):
-        stdv = 1 / math.sqrt(self.hidden_dim)
-        self.w.data.uniform_(-stdv, stdv)
-        if self.b is not None:
-            self.b.data.uniform_(-stdv, stdv)
 
-    def forward(self, A_list, Nodes_list, nodes_mask_list=None):
-        node_feats = Nodes_list[-1]
-
+    def forward(self, Nodes_list, A_list, nodes_mask_list=None):
         for unit in self.GRCU_layers:
             if self.egcn_type == 'EGCNO':
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
@@ -41,17 +26,12 @@ class EvolveGCN(torch.nn.Module):
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
             else:
                 raise Exception('Unsupported EvolveGCN type!')
-        out = Nodes_list[-1]
-        if self.skipfeats:
-            out = torch.cat((out, node_feats), dim=1)  # use node_feats.to_dense() if 2hot encoded input
-        return out
+        return Nodes_list
 
 class GRCU(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, egcn_type='EGCNO'):
+    def __init__(self, input_dim, output_dim, egcn_type='EGCNH'):
         super().__init__()
-        print('start mat GRU')
         self.evolve_weights = mat_GRU_cell(input_dim, output_dim, egcn_type)
-        print('finish mat GRU')
         self.egcn_type = egcn_type
         self.GCN_init_weights = Parameter(torch.FloatTensor(input_dim, output_dim))
         self.reset_param(self.GCN_init_weights)
@@ -70,16 +50,20 @@ class GRCU(torch.nn.Module):
             if self.egcn_type == 'EGCNO':
                 GCN_weights = self.evolve_weights(GCN_weights)
             elif self.egcn_type == 'EGCNH':
-                GCN_weights = self.evolve_weights(GCN_weights, node_embs, mask_list[t])
+                if mask_list is not None:
+                    GCN_weights = self.evolve_weights(GCN_weights, node_embs, mask_list[t])
+                else:
+                    GCN_weights = self.evolve_weights(GCN_weights, node_embs)
             else:
                 raise Exception('Unsupported EvolveGCN type!')
-            node_embs = F.relu(Ahat.matmul(node_embs.matmul(GCN_weights)))
+            node_embs = F.rrelu(Ahat.matmul(node_embs.matmul(GCN_weights)))
+            # node_embs = torch.sigmoid(Ahat.matmul(node_embs.matmul(GCN_weights)))
             out_seq.append(node_embs)
         return out_seq
 
 
 class mat_GRU_cell(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, egcn_type='EGCNO'):
+    def __init__(self, input_dim, output_dim, egcn_type='EGCNH'):
         super().__init__()
         self.egcn_type = egcn_type
         self.update = mat_GRU_gate(input_dim,
@@ -121,6 +105,7 @@ class mat_GRU_gate(torch.nn.Module):
         self.U = Parameter(torch.FloatTensor(rows, rows))
         self.reset_param(self.U)
         self.bias = Parameter(torch.zeros(rows, cols))
+        self.reset_param(self.bias)
 
     def reset_param(self, t):
         # Initialize based on the number of columns
@@ -142,8 +127,10 @@ class TopK(torch.nn.Module):
         stdv = 1. / math.sqrt(t.size(0))
         t.data.uniform_(-stdv, stdv)
 
-    def forward(self, node_embs, mask):
+    def forward(self, node_embs, mask=None):
         scores = node_embs.matmul(self.scorer) / self.scorer.norm()
+        if mask is None:
+            mask = torch.zeros_like(scores).cuda() if torch.cuda.is_available() else torch.zeros_like(scores)
         scores = scores + mask
         vals, topk_indices = scores.view(-1).topk(self.k)
         topk_indices = topk_indices[vals > -float("Inf")]

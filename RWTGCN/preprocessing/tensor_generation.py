@@ -66,6 +66,8 @@ class TensorGenerator:
         elif abs(self.prob) < eps:
             assert structural_graph_path != ''
             if tensor_dir_path != '':
+                import shutil
+                shutil.rmtree(tensor_dir_path)
                 check_and_make_path(tensor_dir_path)
             structural_graph = build_graph(structural_graph_path, self.full_node_list)
             helper.random_walk(structural_graph, self.walk_pair_base_path, self.node_freq_base_path, f_name,
@@ -73,6 +75,9 @@ class TensorGenerator:
         # hybrid random walk on original graph and structural graph
         else:
             assert (original_graph_path != '' and structural_graph_path != '' and tensor_dir_path != '')
+            if os.path.exists(tensor_dir_path):
+                import shutil
+                shutil.rmtree(tensor_dir_path)
             check_and_make_path(tensor_dir_path)
             original_graph = build_graph(original_graph_path, self.full_node_list)
             structural_graph = build_graph(structural_graph_path, self.full_node_list)

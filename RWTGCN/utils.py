@@ -23,7 +23,7 @@ def get_walk_neighbor_dict(file_path, node_num):
         neighbor_dict[nidx] = list(graph.neighbors(nidx))
     return neighbor_dict
 
-def build_graph(file_path, full_node_list, sep='\t'):
+def build_graph(file_path, full_node_list, sep='\t', core=False):
     node_num = len(full_node_list)
     node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
     df = pd.read_csv(file_path, sep=sep)
@@ -33,6 +33,17 @@ def build_graph(file_path, full_node_list, sep='\t'):
     graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
                                     create_using=nx.Graph)
     graph.add_nodes_from(full_node_list)
+    graph.remove_edges_from(nx.selfloop_edges(graph))
+    core_arr = np.array([])
+    if core:
+        t1 = time.time()
+        core_dict = nx.core_number(graph)
+        core_list = []
+        for node in full_node_list:
+            core_list.append(core_dict[node])
+        core_arr = np.array(core_list)
+        t2 = time.time()
+        print('calc k-core time: ', t2 - t1, ' seconds!')
 
     neighbor_dict = {}
     for nidx, node in enumerate(full_node_list):
@@ -40,7 +51,24 @@ def build_graph(file_path, full_node_list, sep='\t'):
         neighbor_dict[nidx] = {'neighbor': list(map(lambda x: node2idx_dict[x], neighbors))}
         weight_arr = np.array([graph[node][neighbor]['weight'] for neighbor in neighbors])
         neighbor_dict[nidx]['weight'] = weight_arr / weight_arr.sum()
-    return neighbor_dict
+    if not core:
+        return neighbor_dict
+    return neighbor_dict, core_arr
+
+def get_nx_graph(file_path, full_node_list, sep='\t'):
+    node_num = len(full_node_list)
+    node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
+    df = pd.read_csv(file_path, sep=sep)
+    if df.shape[1] == 2:
+        df['weight'] = 1.0
+    df['from_id'] = df['from_id'].apply(lambda x: node2idx_dict[x])
+    df['to_id'] = df['to_id'].apply(lambda x: node2idx_dict[x])
+    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
+                                    create_using=nx.Graph)
+    graph.add_nodes_from(np.arange(node_num))
+    graph.remove_edges_from(nx.selfloop_edges(graph))
+    return graph
+
 
 def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
     node_num = len(full_node_list)
@@ -54,6 +82,8 @@ def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
             from_node, to_node, weight = line_list[0], line_list[1], float(line_list[2])
             from_id = node2idx_dict[from_node]
             to_id = node2idx_dict[to_node]
+            if from_id == to_id:
+                continue
             if not weight_flag:
                 A[from_id, to_id] = 1
                 A[to_id, from_id] = 1
@@ -84,10 +114,12 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     shape = torch.Size(sparse_mx.shape)
     return torch.sparse.FloatTensor(indices, values, shape)
 
-
-def get_normalize_adj_tensor(spmat):
-    adj = normalize(spmat + sp.eye(spmat.shape[0]))
-    adj = sparse_mx_to_torch_sparse_tensor(adj)
+def get_normalize_adj(spmat, add_eye=True):
+    if add_eye:
+        adj = normalize(spmat + sp.eye(spmat.shape[0]))
+    else:
+        adj = normalize(spmat)
+    adj = adj.tocoo()
     return adj
 
 # def round_func(val):
@@ -96,14 +128,12 @@ def get_normalize_adj_tensor(spmat):
 #                                 .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
 #     return str(decimal_val)
 
-def wl_transform(spadj, labels, cluster=False):
+def wl_transform(spadj, labels, max_label, cluster=False):
     # the ith entry is equal to the 2 ^ (i - 1)'th prime
     prime_list = [2, 3, 7, 19, 53, 131, 311, 719, 1619, 3671, 8161, 17863, 38873, 84017, 180503,
                   386093, 821641, 1742537, 3681131, 7754077, 16290047]
-
-    label_num = np.max(labels)
     # generate enough primes to have one for each label in the graph
-    max_prime = prime_list[int(np.ceil(np.log2(label_num)))]
+    max_prime = prime_list[int(np.ceil(np.log2(max_label)))]
     primes = list(sieve.primerange(1, max_prime + 1))
     prime_dict = dict(zip(np.arange(1, len(primes) + 1).tolist(), primes))
 
@@ -111,8 +141,8 @@ def wl_transform(spadj, labels, cluster=False):
         return np.log(map_dict[val])
     vfunc = np.vectorize(map_func)
     log_primes = vfunc(labels, prime_dict).reshape(-1, 1)
-
     signatures = labels + spadj.dot(log_primes).reshape(-1)
+    # print('i = 312, signature = ', signatures[312])
     import RWTGCN.preprocessing.helper as helper
     return helper.uniquetol(signatures, cluster=cluster)
 

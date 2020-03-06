@@ -76,6 +76,7 @@ class GatedGraphConvolution(nn.Module):
             gate2 += self.b4
         # gate2 = torch.sigmoid(gate2)
         gate = torch.sigmoid(gate1 + gate2)
+        del gate1, gate2
         # return output, trans
         #return trans + output
         # return torch.cat([trans, output], dim=1)
@@ -114,3 +115,85 @@ class GraphConvolution(nn.Module):
         return self.__class__.__name__ + ' (' \
                + str(self.in_features) + ' -> ' \
                + str(self.out_features) + ')'
+
+
+class Linear(nn.Module):
+    input_dim: int
+    output_dim: int
+    bias: bool
+    def __init__(self, input_dim, output_dim, bias=True):
+        super(Linear, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.bias = bias
+
+        self.w = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
+        if bias:
+            self.b = nn.Parameter(torch.FloatTensor(output_dim))
+        else:
+            self.register_parameter('b', None)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        stdv = 1 / math.sqrt(self.output_dim)
+        self.w.data.uniform_(-stdv, stdv)
+        if self.b is not None:
+            self.b.data.uniform_(-stdv, stdv)
+
+    def forward(self, input):
+        # sparse tensor
+        # print('input', input)
+        if input.layout == torch.sparse_coo:
+            support = torch.sparse.mm(input, self.w)
+        else:
+            support = torch.mm(input, self.w)
+        if self.b is not None:
+            return support + self.b
+        return support
+
+
+###MLP with lienar output
+class MLP(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True):
+        '''
+            num_layers: number of layers in the neural networks (EXCLUDING the input layer). If num_layers=1, this reduces to linear model.
+            input_dim: dimensionality of input features
+            hidden_dim: dimensionality of hidden units at ALL layers
+            output_dim: number of classes for prediction
+            device: which device to use
+        '''
+
+        super(MLP, self).__init__()
+
+        self.linear_or_not = True  # default is linear model
+        self.num_layers = num_layers
+
+        if num_layers <= 1:
+            raise ValueError("number of layers should be positive!")
+        elif num_layers == 1:
+            # Linear model
+            self.linear = Linear(input_dim, output_dim, bias=bias)
+        else:
+            # Multi-layer model
+            self.linear_or_not = False
+            self.linears = torch.nn.ModuleList()
+            self.batch_norms = torch.nn.ModuleList()
+
+            self.linears.append(Linear(input_dim, hidden_dim, bias=bias))
+            for layer in range(num_layers - 2):
+                self.linears.append(Linear(hidden_dim, hidden_dim, bias=bias))
+            self.linears.append(Linear(hidden_dim, output_dim, bias=bias))
+
+            for layer in range(num_layers - 1):
+                self.batch_norms.append(nn.BatchNorm1d((hidden_dim)))
+
+    def forward(self, x):
+        if self.linear_or_not:
+            # If linear model
+            return self.linear(x)
+        else:
+            # If MLP
+            h = x
+            for layer in range(self.num_layers - 1):
+                h = F.relu(self.batch_norms[layer](self.linears[layer](h)))
+            return self.linears[self.num_layers - 1](h)
