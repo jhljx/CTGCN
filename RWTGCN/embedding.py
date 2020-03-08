@@ -1,0 +1,266 @@
+import numpy as np
+import pandas as pd
+import scipy.sparse as sp
+import os, time, json, sys
+import gc
+sys.path.append("..")
+import torch
+import torch.nn as nn
+from RWTGCN.utils import check_and_make_path, get_normalize_adj, get_sp_adj_mat, sparse_mx_to_torch_sparse_tensor
+
+class DataLoader:
+    full_node_list: list
+    node_num: int
+    max_time_num: int
+    def __init__(self, node_list, max_time_num):
+        self.max_time_num = max_time_num
+        self.full_node_list = node_list
+        self.node_num = len(self.full_node_list)
+        return
+
+    def get_date_adj_list(self, origin_base_path, start_idx, duration, alpha=1):
+        date_dir_list = sorted(os.listdir(origin_base_path))
+        date_adj_list = []
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            original_graph_path = os.path.join(origin_base_path, date_dir_list[i])
+            spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
+            # spmat = sp.coo_matrix((np.exp(alpha * spmat.data), (spmat.row, spmat.col)), shape=(self.node_num, self.node_num))
+            spmat = get_normalize_adj(spmat)
+            sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
+            date_adj_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+        # print(len(date_adj_list))
+        return date_adj_list
+
+    def get_core_adj_list(self, core_base_path, start_idx, duration):
+        date_dir_list = sorted(os.listdir(core_base_path))
+        time_stamp_num = len(date_dir_list)
+        assert start_idx < time_stamp_num
+        core_adj_list = []
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            date_dir_path = os.path.join(core_base_path, date_dir_list[i])
+            f_list = sorted(os.listdir(date_dir_path))
+            tmp_adj_list = []
+            for i, f_name in enumerate(f_list):
+                spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
+                spmat = get_normalize_adj(spmat)
+                sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
+                tmp_adj_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            core_adj_list.append(tmp_adj_list)
+        print('core_adj_list len: ', len(core_adj_list))
+        return core_adj_list
+
+    def get_structure_info_list(self, structure_base_path, start_idx, duration):
+        date_dir_list = sorted(os.listdir(structure_base_path))
+        date_adj_list = []
+        feature_dim_list = []
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            structure_info_path = os.path.join(structure_base_path, date_dir_list[i])
+            df_structure = pd.read_csv(structure_info_path, sep='\t', header=0)
+            struture_tensor = torch.FloatTensor(df_structure.values)
+            feature_dim_list.append(df_structure.shape[1])
+            date_adj_list.append(struture_tensor.cuda() if torch.cuda.is_available() else struture_tensor)
+        return feature_dim_list, date_adj_list
+
+    def get_node_pair_list(self, walk_pair_base_path, start_idx, duration):
+        walk_file_list = sorted(os.listdir(walk_pair_base_path))
+        node_pair_list = []
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            walk_file_path = os.path.join(walk_pair_base_path, walk_file_list[i])
+            walk_spadj = sp.load_npz(walk_file_path)
+            neighbor_list = walk_spadj.tolil().rows
+            node_pair_list.append(neighbor_list)
+        return node_pair_list
+
+    def get_neg_freq_list(self, node_freq_base_path, start_idx, duration):
+        freq_file_list = sorted(os.listdir(node_freq_base_path))
+
+        node_freq_list = []
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            freq_file_path = os.path.join(node_freq_base_path, freq_file_list[i])
+            with open(freq_file_path, 'r') as fp:
+                node_freq_list.append(json.load(fp))
+        return node_freq_list
+
+    def get_degree_feature_list(self, origin_base_path, start_idx, duration):
+        x_list = []
+        max_degree = 0
+        degree_list = []
+        ret_degree_list = []
+        date_dir_list = sorted(os.listdir(origin_base_path))
+        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+            original_graph_path = os.path.join(origin_base_path, date_dir_list[i])
+            adj = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
+            degrees = adj.sum(axis=1).astype(np.int)
+            max_degree = max(max_degree, degrees.max())
+            degree_list.append(degrees)
+            ret_degree_list.append(torch.FloatTensor(degrees).cuda() if torch.cuda.is_available() else degrees)
+        for degrees in degree_list:
+            data = np.ones(degrees.shape[0], dtype=np.int)
+            row = np.arange(degrees.shape[0])
+            col = degrees.flatten().A[0]
+            # print('col shape:', col.shape)
+            spmat = sp.csr_matrix((data, (row, col)), shape=(degrees.shape[0], max_degree + 1))
+            sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
+            x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+        print('max degree: ', max_degree + 1)
+        return x_list, max_degree + 1, ret_degree_list
+
+    def get_feature_list(self, feature_base_path, start_idx, duration):
+        if feature_base_path is None:
+            x_list = []
+            for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+                sptensor = sparse_mx_to_torch_sparse_tensor(sp.eye(self.node_num))
+                x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            print('len x_list: ', len(x_list))
+            return x_list
+        else:
+            feature_file_list = sorted(os.listdir(feature_base_path))
+            x_list = []
+            for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
+                feature_file_path = os.path.join(feature_base_path, feature_file_list[i])
+                df_feature = pd.read_csv(feature_file_path, sep='\t', header=0)
+                feature_tensor = torch.FloatTensor(df_feature.values)
+                x_list.append(feature_tensor.cuda() if torch.cuda.is_available() else feature_tensor)
+            print('len x_list: ', len(x_list))
+            return x_list
+
+class BaseEmbedding:
+    base_path: str
+    origin_base_path: str
+    embedding_base_path: str
+    model_base_path: str
+
+    full_node_list: list
+    node_num: int
+    max_time_num: int
+    timestamp_list: list
+    device: torch.device
+
+    def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder="model"):
+        # file paths
+        self.base_path = base_path
+        self.origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
+        self.embedding_base_path = os.path.abspath(os.path.join(base_path, embedding_folder))
+        self.model_base_path = os.path.abspath(os.path.join(base_path, model_folder))
+
+        self.full_node_list = node_list
+        self.node_num = len(self.full_node_list)  # node num
+        self.timestamp_list = sorted(os.listdir(self.origin_base_path))
+
+        # cpu gpu
+        if torch.cuda.is_available():
+            print("GPU")
+            device = torch.device("cuda: 0")
+        else:
+            print("CPU")
+            device = torch.device("cpu")
+            self.set_thread()
+        self.device = device
+
+        self.model = model
+        self.loss = loss
+        self.max_time_num = max_time_num
+
+        check_and_make_path(self.embedding_base_path)
+        check_and_make_path(self.model_base_path)
+
+    def set_thread(self, thread_num=None):
+        if thread_num is None:
+            thread_num = os.cpu_count() - 4
+        torch.set_num_threads(thread_num)
+
+class SupervisedEmbedding(BaseEmbedding):
+    def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder="model"):
+        super(SupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
+
+    def learn_embedding(self, adj_list, x_list, structure_info_list=None, epoch=50, batch_size=10240, alpha=1, lr=1e-3,
+                        start_idx=0, weight_decay=0., model_file='rwtgcn', load_model=False, export=True):
+
+        return
+
+
+class UnsupervisedEmbedding(BaseEmbedding):
+    def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder="model"):
+        super(UnsupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
+
+    def learn_embedding(self, adj_list, x_list, single_output=True, epoch=50, batch_size=10240, lr=1e-3,
+                        start_idx=0, weight_decay=0., model_file='rwtgcn', embedding_type='connection', load_model=False, export=True):
+        print('start learning embedding!')
+        st = time.time()
+        model = self.model
+        if load_model:
+            model.load_state_dict(torch.load(os.path.join(self.model_base_path, model_file)))
+            model.eval()
+
+        if torch.cuda.is_available():
+            model = model.to(self.device)
+            torch.cuda.empty_cache()
+        # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.8, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        optimizer.zero_grad()
+
+        embedding_list, structure_list = [], []
+        batch_num = self.node_num // batch_size
+        if self.node_num % batch_size != 0:
+            batch_num += 1
+        # print('start training!')
+        for i in range(epoch):
+            node_idx_list = np.random.permutation(np.arange(self.node_num))
+            for j in range(batch_num):
+                batch_node_idxs = node_idx_list[j * batch_size: min(self.node_num, (j + 1) * batch_size)]
+                t1 = time.time()
+                if single_output:
+                    embedding_list = model(x_list, adj_list)
+                    loss = self.loss(embedding_list, batch_node_idxs, loss_type=embedding_type)
+                else:
+                    embedding_list, structure_list= model(x_list, adj_list)
+                    loss = self.loss(embedding_list, batch_node_idxs, loss_type=embedding_type, structure_list=structure_list)
+
+                loss.backward()
+                # gradient accumulation
+                if j == batch_num - 1:
+                    optimizer.step()  # update gradient
+                    model.zero_grad()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                t2 = time.time()
+                print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t2 - t1, ' seconds!')
+
+        if export:
+            if embedding_type == 'connection':
+                #print('connection')
+                output_list = embedding_list
+            elif embedding_type == 'structure':
+                output_list = structure_list
+            else:
+                raise AttributeError('Unsupported embedding type!')
+            if isinstance(output_list, list):
+                for i in range(len(output_list)):
+                    embedding = output_list[i]
+                    timestamp = self.timestamp_list[start_idx + i].split('.')[0]
+                    df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+                    embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                    df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+            else: # tensor
+                if len(output_list.size()) == 3:
+                    for i in range(len(output_list)):
+                        embedding = torch.squeeze(output_list[i, :, :], dim=0)
+                        timestamp = self.timestamp_list[start_idx + i].split('.')[0]
+                        df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+                        embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                        df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+                else:
+                    timestamp = self.timestamp_list[start_idx].split('.')[0]
+                    df_export = pd.DataFrame(data=output_list.cpu().detach().numpy(), index=self.full_node_list)
+                    embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                    df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+        # 保存模型
+        torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
+        del adj_list, x_list, embedding_list, model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        else:
+            gc.collect()
+        en = time.time()
+        print('training total time: ', en - st, ' seconds!')
+        return

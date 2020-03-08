@@ -268,7 +268,7 @@ if __name__ == '__main__':
                                    lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
                                    train_ratio=1.0, test_ratio=1.0)
     # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
-    method_list = ['RWTGCN_prob_1']
+    method_list = ['RWTGCN']
     # for neg_num in [10, 20, 50, 80, 100, 150, 200]:
     #     for Q in [0, 10, 20, 50, 100, 200, 500, 1000]:
     #         method_list.append('MRGCN_neg_' + str(neg_num) + '_Q_' + str(Q))

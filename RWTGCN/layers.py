@@ -3,6 +3,7 @@ sys.path.append("..")
 import torch, math
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 class GatedGraphConvolution(nn.Module):
     input_dim: int
@@ -85,13 +86,13 @@ class GatedGraphConvolution(nn.Module):
         return output + gate * (trans - output),  trans + gate * (output - trans)
 
 class GraphConvolution(nn.Module):
-    def __init__(self, in_features, out_features, bias=True):
+    def __init__(self, input_dim, output_dim, bias=True):
         super(GraphConvolution, self).__init__()
-        self.in_features = in_features
-        self.out_features = out_features
-        self.weight = nn.Parameter(torch.FloatTensor(in_features, out_features))
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.weight = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
         if bias:
-            self.bias = nn.Parameter(torch.FloatTensor(out_features))
+            self.bias = nn.Parameter(torch.FloatTensor(output_dim))
         else:
             self.register_parameter('bias', None)
         self.reset_parameters()
@@ -113,8 +114,138 @@ class GraphConvolution(nn.Module):
 
     def __repr__(self):
         return self.__class__.__name__ + ' (' \
-               + str(self.in_features) + ' -> ' \
-               + str(self.out_features) + ')'
+               + str(self.input_dim) + ' -> ' \
+               + str(self.output_dim) + ')'
+
+
+class CoreDiffusion(nn.Module):
+    input_dim: int
+    output_dim: int
+    layer_num: int
+    bias: bool
+    rnn_type: str
+
+    def __init__(self, input_dim, output_dim, bias=True, rnn_type='GRU'):
+        super(CoreDiffusion, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.bias = bias
+        self.rnn_type = rnn_type
+
+        # self.w = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
+        # if bias:
+        #     self.b = nn.Parameter(torch.FloatTensor(output_dim))
+        # else:
+        #     self.register_parameter('b', None)
+        # self.alpha = nn.Parameter(torch.FloatTensor(1))
+        # self.beta = nn.Parameter(torch.FloatTensor(1))
+
+        if self.rnn_type == 'LSTM':
+            self.rnn = LSTMCell(input_dim, output_dim, bias=bias)
+            # self.lstm = nn.LSTM(input_size=input_dim, hidden_size=output_dim, num_layers=1)
+        elif self.rnn_type == 'GRU':
+            self.rnn = GRUCell(input_dim, output_dim, bias=bias)
+            #self.gru = nn.GRU(input_size=input_dim, hidden_size=output_dim, num_layers=1)
+        else:
+            raise AttributeError('Unsupported rnn type!')
+        self.norm = nn.LayerNorm(output_dim)
+        # self.linear = Linear(output_dim * 2, output_dim, bias=bias)
+        # self.reset_parameters()
+
+    def reset_parameters(self):
+        # self.alpha.data.uniform_(0, 1)
+        # self.beta.data.uniform_(0, 1)
+        stdv = 1 / math.sqrt(self.output_dim)
+        self.w.data.uniform_(-stdv, stdv)
+        if self.b is not None:
+            self.b.data.uniform_(-stdv, stdv)
+
+    def forward(self, x, adj_list):
+        # hx = F.relu(torch.sparse.mm(adj_list[0], x))
+        if torch.cuda.is_available():
+            hx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
+        else:
+            hx = Variable(torch.zeros(x.size()[0], self.output_dim))
+        adj_list = adj_list[::-1]
+        for i, adj in enumerate(adj_list):
+            res = F.relu(torch.sparse.mm(adj, x))
+            hx = self.rnn(res, hx)
+        hx = self.norm(hx)
+        return hx
+
+class GRUCell(nn.Module):
+    input_dim: int
+    output_dim: int
+    bias: bool
+
+    def __init__(self, input_dim, output_dim, bias=True):
+        super(GRUCell, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.bias = bias
+
+        self.x2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
+        self.h2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.output_dim)
+        for w in self.parameters():
+            w.data.uniform_(-std, std)
+
+    def forward(self, x, hidden):
+        gate_x = self.x2h(x)
+        gate_h = self.h2h(hidden)
+
+        gate_x = gate_x.squeeze()
+        gate_h = gate_h.squeeze()
+
+        i_r, i_i, i_n = gate_x.chunk(3, 1)
+        h_r, h_i, h_n = gate_h.chunk(3, 1)
+
+        resetgate = torch.sigmoid(i_r + h_r)
+        inputgate = torch.sigmoid(i_i + h_i)
+        newgate = torch.tanh(i_n + (resetgate * h_n))
+        del i_r, i_i, i_n, h_r, h_i, h_n
+        hy = newgate + inputgate * (hidden - newgate)
+        return hy
+
+
+class LSTMCell(nn.Module):
+    input_dim: int
+    output_dim: int
+    bias: bool
+
+    def __init__(self, input_dim, output_dim, bias=True):
+        super(LSTMCell, self).__init__()
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.bias = bias
+
+        self.x2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
+        self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        std = 1.0 / math.sqrt(self.output_dim)
+        for w in self.parameters():
+            w.data.uniform_(-std, std)
+
+    def forward(self, x, hidden):
+        hx, cx = hidden
+        gates = self.x2h(x) + self.h2h(hx)
+        gates = gates.squeeze()
+        ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
+
+        ingate = torch.sigmoid(ingate)
+        forgetgate = torch.sigmoid(forgetgate)
+        cellgate = torch.tanh(cellgate)
+        outgate = torch.sigmoid(outgate)
+
+        cy = torch.mul(cx, forgetgate) + torch.mul(ingate, cellgate)
+        hy = torch.mul(outgate, torch.tanh(cy))
+        del ingate, forgetgate, cellgate, outgate
+        return hy, cy
 
 
 class Linear(nn.Module):
@@ -152,7 +283,7 @@ class Linear(nn.Module):
         return support
 
 
-###MLP with lienar output
+###MLP with linear output
 class MLP(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True):
         '''
@@ -168,7 +299,7 @@ class MLP(nn.Module):
         self.linear_or_not = True  # default is linear model
         self.num_layers = num_layers
 
-        if num_layers <= 1:
+        if num_layers < 1:
             raise ValueError("number of layers should be positive!")
         elif num_layers == 1:
             # Linear model

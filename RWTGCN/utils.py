@@ -12,48 +12,16 @@ def check_and_make_path(to_make):
     if not os.path.exists(to_make):
         os.makedirs(to_make)
 
-def get_walk_neighbor_dict(file_path, node_num):
-    with open(file_path, 'r') as fp:
-        pair_list = json.load(fp)
-    df = pd.DataFrame(pair_list, columns=['from_id', 'to_id'])
-    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", create_using=nx.Graph)
-    graph.add_nodes_from(np.arange(node_num))
-    neighbor_dict = {}
-    for nidx in range(node_num):
-        neighbor_dict[nidx] = list(graph.neighbors(nidx))
-    return neighbor_dict
-
-def build_graph(file_path, full_node_list, sep='\t', core=False):
-    node_num = len(full_node_list)
-    node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
-    df = pd.read_csv(file_path, sep=sep)
-
-    if df.shape[1] == 2:
-        df['weight'] = 1.0
-    graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight',
-                                    create_using=nx.Graph)
-    graph.add_nodes_from(full_node_list)
-    graph.remove_edges_from(nx.selfloop_edges(graph))
-    core_arr = np.array([])
-    if core:
-        t1 = time.time()
-        core_dict = nx.core_number(graph)
-        core_list = []
-        for node in full_node_list:
-            core_list.append(core_dict[node])
-        core_arr = np.array(core_list)
-        t2 = time.time()
-        print('calc k-core time: ', t2 - t1, ' seconds!')
-
-    neighbor_dict = {}
-    for nidx, node in enumerate(full_node_list):
-        neighbors = list(graph.neighbors(node))
-        neighbor_dict[nidx] = {'neighbor': list(map(lambda x: node2idx_dict[x], neighbors))}
-        weight_arr = np.array([graph[node][neighbor]['weight'] for neighbor in neighbors])
-        neighbor_dict[nidx]['weight'] = weight_arr / weight_arr.sum()
-    if not core:
-        return neighbor_dict
-    return neighbor_dict, core_arr
+# def get_walk_neighbor_dict(file_path, node_num):
+#     with open(file_path, 'r') as fp:
+#         pair_list = json.load(fp)
+#     df = pd.DataFrame(pair_list, columns=['from_id', 'to_id'])
+#     graph = nx.from_pandas_edgelist(df, "from_id", "to_id", create_using=nx.Graph)
+#     graph.add_nodes_from(np.arange(node_num))
+#     neighbor_dict = {}
+#     for nidx in range(node_num):
+#         neighbor_dict[nidx] = list(graph.neighbors(nidx))
+#     return neighbor_dict
 
 def get_nx_graph(file_path, full_node_list, sep='\t'):
     node_num = len(full_node_list)
@@ -69,7 +37,6 @@ def get_nx_graph(file_path, full_node_list, sep='\t'):
     graph.remove_edges_from(nx.selfloop_edges(graph))
     return graph
 
-
 def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
     node_num = len(full_node_list)
     node2idx_dict = dict(zip(full_node_list, np.arange(node_num).tolist()))
@@ -82,6 +49,7 @@ def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
             from_node, to_node, weight = line_list[0], line_list[1], float(line_list[2])
             from_id = node2idx_dict[from_node]
             to_id = node2idx_dict[to_node]
+            # remove self-loop data
             if from_id == to_id:
                 continue
             if not weight_flag:
@@ -90,7 +58,6 @@ def get_sp_adj_mat(file_path, full_node_list, sep='\t', weight_flag=False):
             else:
                 A[from_id, to_id] = weight
                 A[to_id, from_id] = weight
-    A = A.tocsr()
     return A
 
 def normalize(mx):
@@ -145,6 +112,14 @@ def wl_transform(spadj, labels, max_label, cluster=False):
     # print('i = 312, signature = ', signatures[312])
     import RWTGCN.preprocessing.helper as helper
     return helper.uniquetol(signatures, cluster=cluster)
+
+def get_format_str(cnt):
+    max_bit = 0
+    while cnt > 0:
+        cnt //= 10
+        max_bit += 1
+    format_str = '{:0>' + str(max_bit) + 'd}'
+    return format_str
 
 def separate(info='', sep='=', num=8):
     if len(info) == 0:

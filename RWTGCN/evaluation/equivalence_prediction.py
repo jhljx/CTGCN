@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import os, time, sys, multiprocessing
 import networkx as nx
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_error
 sys.path.append("..")
@@ -123,14 +123,19 @@ class EquivalencePredictor(object):
         centrality_list = ['closeness', 'betweenness', 'eigenvector', 'kcore']
         mse_list = [date]
         for i, centrality in enumerate(centrality_list):
-            model = LinearRegression(n_jobs=-1)
+            # model = LinearRegression(n_jobs=-1)
+            # min_error = float("inf")
+            # # only using a certain cv value may cause some method have very large MSE, so we need to try different cv values
+            # for cv in [2, 3, 4, 5, 6, 7, 8, 9, 10, 20]:
+            #     y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=cv)
+            #     error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
+            #     min_error = min(min_error, error)
             min_error = float("inf")
-            # only using a certain cv value may cause some method have very large MSE, so we need to try different cv values
-            for cv in [3, 5, 8, 10]:
-                y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=cv)
+            for alpha in [0.05, 0.5, 1, 2, 5, 10, 20, 50, 100]:
+                model = Ridge(alpha=alpha)
+                y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=5)
                 error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
                 min_error = min(min_error, error)
-            # print(y_pred)
             mse_list.append(min_error)
         return mse_list
 
@@ -187,11 +192,11 @@ if __name__ == '__main__':
                                    equ_folder="equ_prediction_data", output_folder="equ_prediction_res", node_file="nodes_set/nodes.csv")
 
     method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
-    method_list = ['RWTGCN_prob_1_alpha=2', 'RWTGCN_prob_1_alpha=1']
+    method_list = ['RWTGCN']
     # prob_list = [1]
     # for prob in prob_list:
     #     method_list.append('RWTGCN_prob_' + str(prob) + '_dur_10')
     t1 = time.time()
-    equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=11)
+    equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=1)
     t2 = time.time()
     print('node classification cost time: ', t2 - t1, ' seconds!')

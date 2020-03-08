@@ -6,14 +6,9 @@ import scipy.sparse as sp
 from libc.math cimport log
 import time
 
-def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_path, int walk_length, int walk_time, bint weight, bint tensor_flag):
+def random_walk(spadj, walk_dir_path, freq_dir_path, f_name, int walk_length, int walk_time, bint weight):
     t1 = time.time()
-    node_num = len(graph_dict.keys())
-    # print('node_num: ', node_num)
-    walk_pair_set =set()
-    node_freq_arr = np.zeros(node_num, dtype=int)
-    walk_adj_list, node_count_list, all_count_list = [{}], [[]], [-1]
-
+    node_num = spadj.shape[0]
     cdef int iter
     cdef int nd_num = node_num
     cdef int nidx
@@ -22,31 +17,34 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
     cdef int j
     cdef int cnt = 1
     cdef int walk_len = walk_length + 1
-    # GCN not need to save multi-step PPMI tensor, MRGCN need
-    if tensor_flag:
-        for i in range(1, walk_len):
-            walk_adj_list.append({})
-            node_count_list.append({})
-            all_count_list.append(0)
 
+    spadj = spadj.tolil()
+    node_neighbor_arr = spadj.rows
+    node_weight_arr = spadj.data
+    walk_spadj = sp.lil_matrix((node_num, node_num))
+    node_freq_arr = np.zeros(node_num, dtype=int)
+
+    weight_arr_dict = dict()
     # random walk
     for nidx in range(nd_num):
         for iter in range(walk_time):
             eps = 1e-8
             walk = [nidx]
-            # print('[' + str(nidx), end='')
             cnt = 1
             while cnt < walk_len:
                 cur = walk[-1]
-                neighbors = graph_dict[cur]['neighbor']
-                weights = graph_dict[cur]['weight']
-                if len(neighbors) == 0:
+                neighbor_list = node_neighbor_arr[cur]
+                if cur not in weight_arr_dict:
+                    weight_arr = np.array(node_weight_arr[cur])
+                    weight_arr = weight_arr / weight_arr.sum()
+                    weight_arr_dict[cur] = weight_arr
+                else:
+                    weight_arr = weight_arr_dict[cur]
+                if len(neighbor_list) == 0:
                     break
-                nxt_id = np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors)
-                # print(',' + str(nxt_id), end='')
+                nxt_id = np.random.choice(neighbor_list, p=weight_arr) if weight else np.random.choice(neighbor_list)
                 walk.append(int(nxt_id))
                 cnt += 1
-            # print(']')
             # count walk pair
             seq_len = len(walk)
             for i in range(seq_len):
@@ -54,24 +52,15 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
                     if walk[i] == walk[j]:
                         continue
                     from_id, to_id = walk[i], walk[j]
-                    edge, reverse_edge = (from_id, to_id), (to_id, from_id)
-                    if tensor_flag:
-                        edge_dict, node_count_dict = walk_adj_list[j - i], node_count_list[j - i]
-                        edge_dict[edge] = edge_dict.get(edge, 0) + 1
-                        edge_dict[reverse_edge] = edge_dict.get(reverse_edge, 0) + 1
-                        node_count_dict[from_id] = node_count_dict.get(from_id, 0) + 1
-                        node_count_dict[to_id] = node_count_dict.get(to_id, 0) + 1
-                        all_count_list[j - i] += 2
                     if j - i <= 2:
-                        walk_pair_set.add(edge)
+                        walk_spadj[i, j] = 1
+                        walk_spadj[j, i] = 1
                     node_freq_arr[from_id] += 1
                     node_freq_arr[to_id] += 1
-
     t2 = time.time()
     print('random walk time: ', t2 - t1, ' seconds!')
 
     tot_freq = node_freq_arr.sum()
-    # print('tot freq: ', tot_freq)
     Z = 0.00001
     neg_node_list = []
     for nidx in range(nd_num):
@@ -85,144 +74,10 @@ def random_walk(graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_pat
     print('node freq time: ', t3 - t2, ' seconds!')
 
     # walk pair set don't store reverse edge
-    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.json')
-    walk_pair_list = list(walk_pair_set)
-    with open(walk_file_path, 'w') as fp:
-        json.dump(walk_pair_list, fp)
+    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.npz')
+    sp.save_npz(walk_file_path, walk_spadj.tocoo())
     t4 = time.time()
     print('walk pair time: ', t4 - t3, ' seconds!')
-
-    if tensor_flag:
-        for idx in range(1, walk_len):
-            edge_dict = walk_adj_list[idx]
-            node_count_dict = node_count_list[idx]
-            all_count = all_count_list[idx]
-            # for edge, cnt in edge_dict.items():
-            #     from_id = edge[0]
-            #     to_id = edge[1]
-            #     res = log(cnt * all_count / (node_count_dict[from_id] * node_count_dict[to_id]))
-            #     edge_dict[edge] = res if res > 0 else res
-            edge_arr = np.array(list(edge_dict.keys()))
-            # weight_arr = np.array(list(edge_dict.values()))
-            weight_arr = np.ones(edge_arr.shape[0], dtype=np.int)
-            spmat = sp.coo_matrix((weight_arr, (edge_arr[:,0], edge_arr[:,1])), shape=(node_num, node_num))
-            sp.save_npz(os.path.join(tensor_dir_path, str(idx) + ".npz"), spmat)
-        t5 = time.time()
-        print('walk tensor time: ', t5 - t4, ' seconds!')
-
-def hybrid_random_walk(original_graph_dict, structural_graph_dict, walk_dir_path, freq_dir_path, f_name, tensor_dir_path,
-                int walk_length, int walk_time, double prob, bint weight):
-    t0 = time.time()
-    t1 =time.time()
-    print('build graph time: ', t1 - t0, ' seconds!')
-
-    node_num = len(original_graph_dict.keys())
-    # print('node num: ', node_num)
-    walk_pair_set =set()
-    node_freq_arr = np.zeros(node_num, dtype=int)
-    walk_adj_list, node_count_list, all_count_list = [{}], [[]], [-1]
-
-    cdef int iter
-    cdef int nd_num = node_num
-    cdef int nidx
-    cdef int seq_len
-    cdef int i
-    cdef int j
-    cdef int cnt = 1
-    cdef int walk_len = walk_length + 1
-    for i in range(1, walk_len):
-        walk_adj_list.append({})
-        node_count_list.append({})
-        all_count_list.append(0)
-    # random walk
-    for nidx in range(nd_num):
-        for iter in range(walk_time):
-            eps = 1e-8
-            walk = [nidx]
-            cnt = 1
-            while cnt < walk_len:
-                cur = walk[-1]
-                rd = np.random.random()
-                if rd <= prob + eps:
-                    neighbors = original_graph_dict[cur]['neighbor']
-                    weights = original_graph_dict[cur]['weight']
-                else:
-                    neighbors = structural_graph_dict[cur]['neighbor']
-                    weights = structural_graph_dict[cur]['weight']
-                if len(neighbors) == 0:
-                    break
-                nxt_id = np.random.choice(neighbors, p=weights) if weight else np.random.choice(neighbors)
-                walk.append(int(nxt_id))
-                cnt += 1
-
-            seq_len = len(walk)
-            for i in range(seq_len):
-                for j in range(i + 1, seq_len):
-                    if walk[i] == walk[j]:
-                        continue
-                    from_id, to_id = walk[i], walk[j]
-                    edge_dict, node_count_dict = walk_adj_list[j - i], node_count_list[j - i]
-                    edge, reverse_edge = (from_id, to_id), (to_id, from_id)
-                    edge_dict[edge] = edge_dict.get(edge, 0) + 1
-                    edge_dict[reverse_edge] = edge_dict.get(reverse_edge, 0) + 1
-                    node_count_dict[from_id] = node_count_dict.get(from_id, 0) + 1
-                    node_count_dict[to_id] = node_count_dict.get(to_id, 0) + 1
-                    all_count_list[j - i] += 2
-
-                    walk_pair_set.add(edge)
-                    node_freq_arr[from_id] += 1
-                    node_freq_arr[to_id] += 1
-    t2 = time.time()
-    print('random walk time: ', t2 - t1, ' seconds!')
-
-    tot_freq = node_freq_arr.sum()
-    Z = 0.00001
-    neg_node_list = []
-    # print('tot_freq = ', tot_freq)
-    for nidx in range(nd_num):
-        rep_num = int(((node_freq_arr[nidx]/tot_freq)**0.75)/ Z)
-        neg_node_list += [nidx] * rep_num
-    walk_file_path = os.path.join(freq_dir_path, f_name.split('.')[0] + '.json')
-    with open(walk_file_path, 'w') as fp:
-        json.dump(neg_node_list, fp)
-    del neg_node_list, node_freq_arr
-    t3 = time.time()
-    print('node freq time: ', t3 - t2, ' seconds!')
-
-    walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.json')
-    walk_pair_list = list(walk_pair_set)
-    with open(walk_file_path, 'w') as fp:
-        json.dump(walk_pair_list, fp)
-    t4 = time.time()
-    print('walk pair time: ', t4 - t3, ' seconds!')
-
-    cdef int max_bit = 0
-    cdef int max_walk_len = walk_len
-    while max_walk_len > 0:
-        max_walk_len /= 10
-        max_bit += 1
-    format_str = '{:0>' + str(max_bit) + 'd}'
-
-    for idx in range(1, walk_len):
-        edge_dict = walk_adj_list[idx]
-        node_count_dict = node_count_list[idx]
-        all_count = all_count_list[idx]
-        # for edge, cnt in edge_dict.items():
-        #     from_id = edge[0]
-        #     to_id = edge[1]
-        #     res = cnt / node_count_dict[from_id]
-        #     edge_dict[edge] = res
-            # res = log(cnt * all_count / (node_count_dict[from_id] * node_count_dict[to_id]))
-            # edge_dict[edge] = res if res > 0 else res
-        # sometimes covert dict.keys() into list would cost a lot of time. i.e. for each node, store neighbors in dict. then iterate all nodes to covert each neighbor dict.keys() into list
-        edge_arr = np.array(list(edge_dict.keys()))
-        #weight_arr = np.array(list(edge_dict.values()))
-        weight_arr = np.ones(edge_arr.shape[0], dtype=np.int)
-        spmat = sp.coo_matrix((weight_arr, (edge_arr[:,0], edge_arr[:,1])), shape=(node_num, node_num))
-        signature = format_str.format(idx)
-        sp.save_npz(os.path.join(tensor_dir_path, signature + ".npz"), spmat)
-    t5 = time.time()
-    print('walk tensor time: ', t5 - t4, ' seconds!')
 
 # get unique values from array with tolerance=1e-12
 def uniquetol(data_arr, cluster=False):
@@ -263,116 +118,18 @@ def sigmoid(x):
     s = 1 / (1 + np.exp(-x))
     return s
 
-def calc_structural_weight(cluster_dict, spadj_list, core_arr, labels, int max_label, structure_edge_dict, int max_neighbor_num=-1, int max_nxt_num=-1, int idx=-1):
+def calc_structure_info(spadj, labels, int max_label):
     cdef int node_num = len(labels)
     cdef int i = 0
-
-    level_neighbor_hist_list = []
-    max_level = len(spadj_list)
-    # print('max label = ', max_label)
-    data = labels.reshape(-1, 1)
-
-    for i, spadj in enumerate(spadj_list):
-        node_neighbor_list = spadj.tolil().rows
-        neighbor_hist_list = []
-        for j in range(node_num):
-            neighbor_list = node_neighbor_list[j]
-            hist_arr = np.zeros(max_label, dtype=np.int)
-            if i == 0:
-                hist_arr[labels[j] - 1] += 1
-            # print('hist arr shape: ', hist_arr.shape)
-            for neighbor in neighbor_list:
-                hist_arr[labels[neighbor] - 1] += 1
-            neighbor_hist_list.append(hist_arr)
-        pd.DataFrame(neighbor_hist_list).to_csv('feature_' + str(i) + '.csv', sep=',', index=False)
-        level_neighbor_hist_list.append(neighbor_hist_list)
-
-    edge_cnt_dict = dict()
+    neighbor_hist_list = []
+    node_neighbor_list = spadj.tolil().rows
     for i in range(node_num):
-        cluster_type = core_arr[i]
-        if max_neighbor_num == -1:
-            sample_nodes = cluster_dict[cluster_type]
-        else:
-            sample_nodes = random.sample(cluster_dict[cluster_type])
-
-        for nidx in sample_nodes:
-            edge, reverse_edge = (i, nidx), (nidx, i)
-            if i == nidx or edge in edge_cnt_dict or reverse_edge in edge_cnt_dict:
-                continue
-            edge_cnt_dict[edge] = edge_cnt_dict[reverse_edge] = 1
-            weight = 0
-            for level in range(max_level):
-                weight += (level_neighbor_hist_list[level][i] * level_neighbor_hist_list[level][nidx]).sum()
-            if weight > 0:
-                structure_edge_dict[edge] = structure_edge_dict.get(edge, 0) + weight
-                structure_edge_dict[reverse_edge] = structure_edge_dict.get(reverse_edge, 0) + weight
-
-        if cluster_type + 1 in cluster_dict:
-            if max_nxt_num == -1:
-                sample_nodes = cluster_dict[cluster_type + 1]
-            else:
-                sample_nodes = random.sample(cluster_dict[cluster_type + 1])
-
-            for nidx in sample_nodes:
-                edge, reverse_edge = (i, nidx), (nidx, i)
-                if i == nidx or edge in edge_cnt_dict or reverse_edge in edge_cnt_dict:
-                    continue
-                edge_cnt_dict[edge] = edge_cnt_dict[reverse_edge] = 1
-                weight = 0
-                for level in range(max_level):
-                    weight += (level_neighbor_hist_list[level][i] * level_neighbor_hist_list[level][nidx]).sum()
-                if weight > 0:
-                    structure_edge_dict[edge] = structure_edge_dict.get(edge, 0) + weight
-                    structure_edge_dict[reverse_edge] = structure_edge_dict.get(reverse_edge, 0) + weight
-# def get_structural_neighbors(color_arr, output_file, cluster_dict, cluster_len_dict, idx2nid_dict, int max_neighbor_num):
-#     structural_edges_dict = dict()
-#     structural_edge_list = []
-#
-#     t1 = time.time()
-#     cdef int i = 0
-#     cdef int node_num = color_arr.shape[0]
-#     cdef int cnt = 0
-#     cdef int maxnum = 0
-#
-#     for i in range(node_num):
-#         row_arr = color_arr[i, :]
-#         from_node = idx2nid_dict[i]
-#         cluster_type = row_arr[0]
-#         cluster_list = cluster_dict[cluster_type]
-#         cluster_num = cluster_len_dict[cluster_type]
-#         if cluster_num >= max_neighbor_num:
-#             sampled_nodes = random.sample(cluster_list, max_neighbor_num)
-#         else:
-#             sample_nodes = cluster_list.copy()
-#             sample_list = []
-#             cnt = 0
-#             maxnum = max_neighbor_num - cluster_num
-#             bias = 1
-#             while(cnt < maxnum):
-#                 for op in [-1, 1]:
-#                     if cluster_type + op * bias in cluster_dict:
-#                         tmp_num = cluster_len_dict[cluster_type + op * bias]
-#                         if cnt + tmp_num <= maxnum:
-#                             sample_nodes.extend(cluster_dict[cluster_type + op * bias])
-#                             cnt += tmp_num
-#                         else:
-#                             sample_nodes.extend(random.sample(cluster_dict[cluster_type + op * bias], maxnum - cnt))
-#                             cnt = maxnum
-#                             break
-#                 bias += 1
-#
-#         for j in range(max_neighbor_num):
-#             to_idx = sampled_nodes[j]
-#             to_node = idx2nid_dict[to_idx]
-#             edge = (from_node, to_node)
-#             reverse_edge = (to_node, from_node)
-#             if from_node == to_node or edge in structural_edges_dict or reverse_edge in structural_edges_dict:
-#                 continue
-#             to_arr = color_arr[to_idx, :]
-#             weight = sigmoid(row_arr.dot(to_arr))
-#             structural_edge_list.append([from_node, to_node, weight])
-#
-#     df_structural_edges = pd.DataFrame(structural_edge_list, columns=['from_id', 'to_id', 'weight'])
-#     print('edge num: ', df_structural_edges.shape[0])
-#     df_structural_edges.to_csv(output_file, sep='\t', index=False, header=True, float_format='%.3f')
-    return
+        neighbor_list = node_neighbor_list[i]
+        hist_arr = np.zeros(max_label, dtype=np.int)
+        hist_arr[labels[i] - 1] += 1
+        for neighbor in neighbor_list:
+            hist_arr[labels[neighbor] - 1] += 1
+        hist_arr = hist_arr / hist_arr.sum()
+        neighbor_hist_list.append(hist_arr)
+    neighbor_hist_arr = np.array(neighbor_hist_list)
+    return neighbor_hist_arr
