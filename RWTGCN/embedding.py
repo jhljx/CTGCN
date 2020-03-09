@@ -49,18 +49,6 @@ class DataLoader:
         print('core_adj_list len: ', len(core_adj_list))
         return core_adj_list
 
-    def get_structure_info_list(self, structure_base_path, start_idx, duration):
-        date_dir_list = sorted(os.listdir(structure_base_path))
-        date_adj_list = []
-        feature_dim_list = []
-        for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
-            structure_info_path = os.path.join(structure_base_path, date_dir_list[i])
-            df_structure = pd.read_csv(structure_info_path, sep='\t', header=0)
-            struture_tensor = torch.FloatTensor(df_structure.values)
-            feature_dim_list.append(df_structure.shape[1])
-            date_adj_list.append(struture_tensor.cuda() if torch.cuda.is_available() else struture_tensor)
-        return feature_dim_list, date_adj_list
-
     def get_node_pair_list(self, walk_pair_base_path, start_idx, duration):
         walk_file_list = sorted(os.listdir(walk_pair_base_path))
         node_pair_list = []
@@ -73,7 +61,6 @@ class DataLoader:
 
     def get_neg_freq_list(self, node_freq_base_path, start_idx, duration):
         freq_file_list = sorted(os.listdir(node_freq_base_path))
-
         node_freq_list = []
         for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
             freq_file_path = os.path.join(node_freq_base_path, freq_file_list[i])
@@ -173,8 +160,8 @@ class SupervisedEmbedding(BaseEmbedding):
     def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder="model"):
         super(SupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
 
-    def learn_embedding(self, adj_list, x_list, structure_info_list=None, epoch=50, batch_size=10240, alpha=1, lr=1e-3,
-                        start_idx=0, weight_decay=0., model_file='rwtgcn', load_model=False, export=True):
+    def learn_embedding(self, adj_list, x_list, epoch=50, batch_size=10240, alpha=1, lr=1e-3,
+                        start_idx=0, weight_decay=0., model_file='rwtgcn', embedding_type='connection', load_model=False, export=True):
 
         return
 

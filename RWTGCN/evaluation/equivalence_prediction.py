@@ -192,7 +192,7 @@ if __name__ == '__main__':
                                    equ_folder="equ_prediction_data", output_folder="equ_prediction_res", node_file="nodes_set/nodes.csv")
 
     method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
-    method_list = ['RWTGCN']
+    method_list = ['RWTGCN_S', 'RWTGCN_C']
     # prob_list = [1]
     # for prob in prob_list:
     #     method_list.append('RWTGCN_prob_' + str(prob) + '_dur_10')

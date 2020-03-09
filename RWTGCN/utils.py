@@ -4,24 +4,12 @@ import scipy.sparse as sp
 import networkx as nx
 import os, json, time, random
 import torch
-from sympy import sieve
 
 def check_and_make_path(to_make):
     if to_make == '':
         return
     if not os.path.exists(to_make):
         os.makedirs(to_make)
-
-# def get_walk_neighbor_dict(file_path, node_num):
-#     with open(file_path, 'r') as fp:
-#         pair_list = json.load(fp)
-#     df = pd.DataFrame(pair_list, columns=['from_id', 'to_id'])
-#     graph = nx.from_pandas_edgelist(df, "from_id", "to_id", create_using=nx.Graph)
-#     graph.add_nodes_from(np.arange(node_num))
-#     neighbor_dict = {}
-#     for nidx in range(node_num):
-#         neighbor_dict[nidx] = list(graph.neighbors(nidx))
-#     return neighbor_dict
 
 def get_nx_graph(file_path, full_node_list, sep='\t'):
     node_num = len(full_node_list)
@@ -89,30 +77,6 @@ def get_normalize_adj(spmat, add_eye=True):
     adj = adj.tocoo()
     return adj
 
-# def round_func(val):
-#     from decimal import Decimal, ROUND_HALF_UP
-#     decimal_val = Decimal(val).quantize(Decimal('0.00000001'), rounding=ROUND_HALF_UP) \
-#                                 .quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
-#     return str(decimal_val)
-
-def wl_transform(spadj, labels, max_label, cluster=False):
-    # the ith entry is equal to the 2 ^ (i - 1)'th prime
-    prime_list = [2, 3, 7, 19, 53, 131, 311, 719, 1619, 3671, 8161, 17863, 38873, 84017, 180503,
-                  386093, 821641, 1742537, 3681131, 7754077, 16290047]
-    # generate enough primes to have one for each label in the graph
-    max_prime = prime_list[int(np.ceil(np.log2(max_label)))]
-    primes = list(sieve.primerange(1, max_prime + 1))
-    prime_dict = dict(zip(np.arange(1, len(primes) + 1).tolist(), primes))
-
-    def map_func(val, map_dict):
-        return np.log(map_dict[val])
-    vfunc = np.vectorize(map_func)
-    log_primes = vfunc(labels, prime_dict).reshape(-1, 1)
-    signatures = labels + spadj.dot(log_primes).reshape(-1)
-    # print('i = 312, signature = ', signatures[312])
-    import RWTGCN.preprocessing.helper as helper
-    return helper.uniquetol(signatures, cluster=cluster)
-
 def get_format_str(cnt):
     max_bit = 0
     while cnt > 0:
@@ -126,27 +90,3 @@ def separate(info='', sep='=', num=8):
         print(sep * (2 * num))
     else:
         print(sep * num, info, sep * num)
-
-if __name__ == '__main__':
-    A = np.array([[0, 1, 1, 1, 1],
-                  [1, 0, 1, 0, 0],
-                  [1, 1, 0, 0, 0],
-                  [1, 0, 0, 0, 1],
-                  [1, 0, 0, 1, 0]])
-    spmat = sp.csr_matrix(A)
-    labels = np.ones(len(A))
-    new_label = wl_transform(spmat, labels)
-    print(new_label)
-
-    A = np.array([[0, 1, 0, 1, 0, 0],
-                  [1, 0, 1, 0, 0, 0],
-                  [0, 1, 0, 1, 0, 0],
-                  [1, 0, 1, 0, 1, 0],
-                  [0, 0, 0, 1, 0, 1],
-                  [0, 0, 0, 0, 1, 0]])
-    spmat = sp.csr_matrix(A)
-    labels = np.ones(len(A))
-    new_label = wl_transform(spmat, labels)
-    print(new_label)
-    new_label = wl_transform(spmat, new_label)
-    print(new_label)

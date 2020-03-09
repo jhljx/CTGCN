@@ -132,14 +132,6 @@ class CoreDiffusion(nn.Module):
         self.bias = bias
         self.rnn_type = rnn_type
 
-        # self.w = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
-        # if bias:
-        #     self.b = nn.Parameter(torch.FloatTensor(output_dim))
-        # else:
-        #     self.register_parameter('b', None)
-        # self.alpha = nn.Parameter(torch.FloatTensor(1))
-        # self.beta = nn.Parameter(torch.FloatTensor(1))
-
         if self.rnn_type == 'LSTM':
             self.rnn = LSTMCell(input_dim, output_dim, bias=bias)
             # self.lstm = nn.LSTM(input_size=input_dim, hidden_size=output_dim, num_layers=1)
@@ -148,20 +140,8 @@ class CoreDiffusion(nn.Module):
             #self.gru = nn.GRU(input_size=input_dim, hidden_size=output_dim, num_layers=1)
         else:
             raise AttributeError('Unsupported rnn type!')
-        self.norm = nn.LayerNorm(output_dim)
-        # self.linear = Linear(output_dim * 2, output_dim, bias=bias)
-        # self.reset_parameters()
-
-    def reset_parameters(self):
-        # self.alpha.data.uniform_(0, 1)
-        # self.beta.data.uniform_(0, 1)
-        stdv = 1 / math.sqrt(self.output_dim)
-        self.w.data.uniform_(-stdv, stdv)
-        if self.b is not None:
-            self.b.data.uniform_(-stdv, stdv)
 
     def forward(self, x, adj_list):
-        # hx = F.relu(torch.sparse.mm(adj_list[0], x))
         if torch.cuda.is_available():
             hx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
         else:
@@ -170,7 +150,6 @@ class CoreDiffusion(nn.Module):
         for i, adj in enumerate(adj_list):
             res = F.relu(torch.sparse.mm(adj, x))
             hx = self.rnn(res, hx)
-        hx = self.norm(hx)
         return hx
 
 class GRUCell(nn.Module):

@@ -228,7 +228,7 @@ if __name__ == '__main__':
     # prob_list = [0]
     # for prob in prob_list:
     #     method_list.append('RWTGCN_prob_' + str(prob))
-    method_list = ['RWTGCN']
+    method_list = ['RWTGCN_S']
 
     t1 = time.time()
     for i in range(rep_num):
