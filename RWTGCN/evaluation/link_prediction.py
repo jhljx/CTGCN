@@ -257,22 +257,73 @@ class LinkPredictor(object):
             pool.join()
         print('Finish link prediction!')
 
+def process_result(dataset, rep_num, method_list):
+    for method in method_list:
+        base_path = os.path.join('../../data/' + dataset, 'link_prediction_res_0')
+        res_path = os.path.join(base_path, method + '_auc_record.csv')
+        df_method = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg0', 'had0', 'l1_0', 'l2_0'])
+        df_avg = df_method.loc[:, [date, 'avg0']].copy()
+        df_had = df_method.loc[:, [date, 'had0']].copy()
+        df_l1 = df_method.loc[:, [date, 'l1_0']].copy()
+        df_l2 = df_method.loc[:, [date, 'l2_0']].copy()
+        for i in range(1, rep_num):
+            base_path = os.path.join('../../data/' + dataset, 'node_classification_res_' + str(i))
+            res_path = os.path.join(base_path, method + '_acc_record.csv')
+            df_rep = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg' + str(i), 'had' + str(i), 'l1_' + str(i), 'l2_' + str(i)])
+            df_avg = pd.concat([df_avg, df_rep.loc[:, ['avg' + str(i)]]], axis=1)
+            df_had = pd.concat([df_had, df_rep.loc[:, ['had' + str(i)]]], axis=1)
+            df_l1 = pd.concat([df_l1, df_rep.loc[:, ['l1_' + str(i)]]], axis=1)
+            df_l2 = pd.concat([df_l2, df_rep.loc[:, ['l2_' + str(i)]]], axis=1)
+        output_base_path = os.path.join('../../data/' + dataset, 'link_prediction_res')
+        check_and_make_path(output_base_path)
+
+        avg_list = ['avg' + str(i) for i in range(rep_num)]
+        df_avg['avg'] = df_avg.loc[:, avg_list].mean(axis=1)
+        df_avg['max'] = df_avg.loc[:, avg_list].max(axis=1)
+        df_avg['min'] = df_avg.loc[:, avg_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_avg_record.csv')
+        df_avg.to_csv(output_path, sep=',', index=False)
+
+        had_list = ['had' + str(i) for i in range(rep_num)]
+        df_had['avg'] = df_had.loc[:, had_list].mean(axis=1)
+        df_had['max'] = df_had.loc[:, had_list].max(axis=1)
+        df_had['min'] = df_had.loc[:, had_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_had_record.csv')
+        df_had.to_csv(output_path, sep=',', index=False)
+
+        l1_list = ['l1_' + str(i) for i in range(rep_num)]
+        df_l1['avg'] = df_l1.loc[:, l1_list].mean(axis=1)
+        df_l1['max'] = df_l1.loc[:, l1_list].max(axis=1)
+        df_l1['min'] = df_l1.loc[:, l1_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_l1_record.csv')
+        df_l1.to_csv(output_path, sep=',', index=False)
+
+        l2_list = ['l2_' + str(i) for i in range(rep_num)]
+        df_l2['avg'] = df_l2.loc[:, l2_list].mean(axis=1)
+        df_l2['max'] = df_l2.loc[:, l2_list].max(axis=1)
+        df_l2['min'] = df_l2.loc[:, l2_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_l2_record.csv')
+        df_l2.to_csv(output_path, sep=',', index=False)
+
 
 if __name__ == '__main__':
-    dataset = 'math'
-    data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
-                                   output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
-    # data_generator.generate_edge_samples()
+    dataset = 'facebook'
+    rep_num = 1
 
-    link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
-                                   lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
-                                   train_ratio=1.0, test_ratio=1.0)
-    # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'dyGEM', 'timers']
-    method_list = ['CGCN_C']
-    # for neg_num in [10, 20, 50, 80, 100, 150, 200]:
-    #     for Q in [0, 10, 20, 50, 100, 200, 500, 1000]:
-    #         method_list.append('MRGCN_neg_' + str(neg_num) + '_Q_' + str(Q))
-    t1 = time.time()
-    link_predictor.link_prediction_all_method(method_list=method_list, worker=-1)
-    t2 = time.time()
-    print('link prediction cost time: ', t2 - t1, ' seconds!')
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCN', 'RWTGCN_C', 'CGCN_C']
+    # method_list = ['GAT']
+
+    for i in range(rep_num):
+        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+                                       output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
+        # data_generator.generate_edge_samples()
+
+        link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+                                       lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
+                                       train_ratio=1.0, test_ratio=1.0)
+        t1 = time.time()
+        link_predictor.link_prediction_all_method(method_list=method_list, worker=-1)
+        t2 = time.time()
+        print('link prediction cost time: ', t2 - t1, ' seconds!')
+
+    # process_result(dataset, rep_num, method_list)

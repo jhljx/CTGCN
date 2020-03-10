@@ -39,6 +39,19 @@ def gcn_process(dataset, worker=-1):
     t2 = time.time()
     print('finish gcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
+def gat_process(dataset, worker=-1):
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    origin_folder = os.path.join('..', '1.format')
+    node_file = os.path.join('..', 'nodes_set/nodes.csv')
+
+    t1 = time.time()
+    processing = Processing(base_path=base_path, origin_folder=origin_folder, core_folder=None,
+                            walk_pair_folder='gat_walk_pairs', node_freq_folder='gat_node_freq', node_file=node_file,
+                            walk_time=10, walk_length=5)
+    processing.run(worker=worker)
+    t2 = time.time()
+    print('finish gat preprocessing! total cost time:', t2 - t1, ' seconds!')
+
 def evolvegcn_process(dataset, worker=-1):
     base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
     origin_folder = os.path.join('..', '1.format')
@@ -79,6 +92,7 @@ def rwtgcn_process(dataset, worker=-1, calc_structure=True):
     print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
-    dataset = 'enron'
-    worker = 30
+    dataset = 'blogcatalog'
+    worker = 10
+    #gat_process(dataset=dataset, worker=worker)
     cgcn_process(dataset=dataset, worker=worker, calc_structure=True)

@@ -223,8 +223,6 @@ if __name__ == '__main__':
 
     # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
 
-    method_list = []
-    prob_list = [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1]
     # prob_list = [0]
     # for prob in prob_list:
     #     method_list.append('RWTGCN_prob_' + str(prob))

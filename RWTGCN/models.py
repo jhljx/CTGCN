@@ -4,30 +4,40 @@ import torch, math
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from RWTGCN.layers import CoreDiffusion, GraphConvolution, MLP, GRUCell, LSTMCell
+from RWTGCN.layers import CoreDiffusion, MLP, GRUCell, LSTMCell
 
 class CDN(nn.Module):
     input_dim: int
     hidden_dim: int
     output_dim: int
-    layer_num: int
+    diffusion_num: int
     bias: bool
     rnn_type: str
 
-    def __init__(self, input_dim, hidden_dim, output_dim, bias=True, rnn_type='GRU'):
+    def __init__(self, input_dim, hidden_dim, output_dim, diffusion_num, bias=True, rnn_type='GRU'):
         super(CDN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.diffusion_num = diffusion_num
         self.bias = bias
         self.rnn_type = rnn_type
 
-        self.diffusion1 = CoreDiffusion(input_dim, hidden_dim, bias=bias, rnn_type=rnn_type)
-        self.diffusion2 = CoreDiffusion(hidden_dim, output_dim, bias=bias, rnn_type=rnn_type)
+        if diffusion_num == 1:
+            self.diffusion_list = nn.ModuleList()
+            self.diffusion_list.append(CoreDiffusion(input_dim, output_dim, bias=bias, rnn_type=rnn_type))
+        elif diffusion_num > 1:
+            self.diffusion_list = nn.ModuleList()
+            self.diffusion_list.append(CoreDiffusion(input_dim, hidden_dim, bias=bias, rnn_type=rnn_type))
+            for i in range(diffusion_num - 2):
+                self.diffusion_list.append(CoreDiffusion(hidden_dim, hidden_dim, bias=bias, rnn_type=rnn_type))
+            self.diffusion_list.append(CoreDiffusion(hidden_dim, output_dim, bias=bias, rnn_type=rnn_type))
+        else:
+            raise ValueError("number of layers should be positive!")
 
     def forward(self, x, adj_list):
-        x = self.diffusion1(x, adj_list)
-        x = self.diffusion2(x, adj_list)
+        for i in range(self.diffusion_num):
+            x = self.diffusion_list[i](x, adj_list)
         return x
 
 
@@ -35,66 +45,48 @@ class CGCN(nn.Module):
     input_dim: int
     hidden_dim: int
     output_dim: int
-    layer_num: int
+    trans_num: int
+    diffusion_num: int
     bias: bool
     rnn_type: str
 
-    def __init__(self, input_dim, hidden_dim, output_dim, bias=True, rnn_type='GRU'):
+    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, bias=True, rnn_type='GRU'):
         super(CGCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
+        self.trans_num = trans_num
+        self.diffusion_num = diffusion_num
         self.bias = bias
         self.rnn_type = rnn_type
 
-        self.linear = MLP(input_dim, hidden_dim, output_dim, num_layers=1, bias=bias)
-        self.diffusion1 = CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type)
-        self.diffusion2 = CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type)
+        self.mlp = MLP(input_dim, hidden_dim, output_dim, num_layers=trans_num, bias=bias)
+
+        if diffusion_num == 1:
+            self.diffusion_list = nn.ModuleList()
+            self.diffusion_list.append(CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type))
+        elif diffusion_num > 1:
+            self.diffusion_list = nn.ModuleList()
+            for i in range(diffusion_num):
+                self.diffusion_list.append(CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type))
+        else:
+            raise ValueError("number of layers should be positive!")
 
     def forward(self, x, adj_list):
         if isinstance(x, list):
             assert len(x) == 1
             x, adj_list = x[0], adj_list[0]
-            trans = self.linear(x)
-            x = self.diffusion1(trans, adj_list)
-            x = self.diffusion2(x, adj_list)
+            trans = self.mlp(x)
+            x = trans
+            for i in range(self.diffusion_num):
+                x = self.diffusion_list[i](x, adj_list)
             return x, trans
-        trans = self.linear(x)
-        x = self.diffusion1(trans, adj_list)
-        x = self.diffusion2(x, adj_list)
+        trans = self.mlp(x)
+        x = trans
+        for i in range(self.diffusion_num):
+            x = self.diffusion_list[i](x, adj_list)
         return x, trans
 
-
-
-class GCN(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout, bias=True):
-        super(GCN, self).__init__()
-
-        self.gc1 = GraphConvolution(input_dim, hidden_dim, bias=bias)
-        self.gc2 = GraphConvolution(hidden_dim, output_dim, bias=bias)
-        self.dropout = dropout
-
-    def forward(self, x, adj):
-        # GCN for static embedding
-        if isinstance(x, list):
-            assert len(x) == 1
-            hx_list = []
-            # if torch.cuda.is_available():
-            #     x1 = F.relu(self.gc1(x[0].cuda(), adj[0].cuda()))
-            # else:
-            x1 = F.relu(self.gc1(x[0], adj[0]))
-            x1 = F.dropout(x1, self.dropout, training=self.training)
-            x2 = self.gc2(x1, adj[0])
-            hx_list.append(x2)
-            return hx_list
-        # x is a sparse tensor, component of other model
-        # if torch.cuda.is_available():
-        #     x = F.relu(self.gc1(x.cuda(), adj.cuda()))
-        # else:
-        x = F.relu(self.gc1(x, adj))
-        x = F.dropout(x, self.dropout, training=self.training)
-        x = self.gc2(x, adj)
-        return x
 
 class RWTGCN(nn.Module):
     input_dim: int
@@ -102,25 +94,27 @@ class RWTGCN(nn.Module):
     output_dim: int
     rnn_type: str
     duration: int
-    layer_num: int
+    trans_num: int
+    diffusion_num: int
     bias: bool
 
-    def __init__(self, input_dim, hidden_dim, output_dim, layer_num, duration, bias=True, rnn_type='GRU'):
+    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, duration, bias=True, rnn_type='GRU'):
         super(RWTGCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.rnn_type = rnn_type
         self.duration = duration
-        self.layer_num = layer_num
+        self.trans_num = trans_num
+        self.diffusion_num = diffusion_num
         self.bias = bias
 
         self.mlp_list = nn.ModuleList()
         self.duffision_list = nn.ModuleList()
 
         for i in range(self.duration):
-            self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, layer_num, bias=bias))
-            self.duffision_list.append(CDN(output_dim, output_dim, output_dim, rnn_type=rnn_type))
+            self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias))
+            self.duffision_list.append(CDN(output_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type))
         if self.rnn_type == 'LSTM':
             self.rnn = LSTMCell(output_dim, output_dim, bias=bias)
             # self.lstm = nn.LSTM(input_size=output_dim, hidden_size=output_dim, num_layers=1, bidirectional=False)
@@ -138,11 +132,10 @@ class RWTGCN(nn.Module):
             hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
         trans_list = []
         hx_list = []
-        # reconstruct_list = []
         for i in range(len(x_list)):
             x = self.mlp_list[i](x_list[i])
             trans_list.append(x)
             x = self.duffision_list[i](x, adj_list[i])
             hx = self.rnn(x, hx)
             hx_list.append(hx)
-        return hx_list, trans_list# , reconstruct_list
+        return hx_list, trans_list

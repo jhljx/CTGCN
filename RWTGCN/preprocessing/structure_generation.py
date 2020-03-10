@@ -31,6 +31,12 @@ class StructureInfoGenerator:
         core_num_dict = nx.core_number(graph)
         max_core_num = max(list(core_num_dict.values()))
         print('max core num: ', max_core_num)
+        # x= list(graph.degree())
+        # max_degree = max(list(zip(*x))[1])
+        # # print('max degree: ', max_degree)
+        # core_list.append(max_core_num)
+        # degree_list.append(max_degree)
+        # return
         check_and_make_path(output_dir)
 
         format_str = get_format_str(max_core_num)
@@ -51,7 +57,7 @@ class StructureInfoGenerator:
             for i, f_name in enumerate(f_list):
                 self.get_kcore_graph(
                     input_file=os.path.join(self.origin_base_path, f_name),
-                    output_dir=os.path.join(self.core_base_path, f_name.split('.')[0]), )
+                    output_dir=os.path.join(self.core_base_path, f_name.split('.')[0]))
         else:
             worker = min(worker, length, os.cpu_count())
             pool = multiprocessing.Pool(processes=worker)

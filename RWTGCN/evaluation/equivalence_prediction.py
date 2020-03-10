@@ -126,12 +126,12 @@ class EquivalencePredictor(object):
             # model = LinearRegression(n_jobs=-1)
             # min_error = float("inf")
             # # only using a certain cv value may cause some method have very large MSE, so we need to try different cv values
-            # for cv in [2, 3, 4, 5, 6, 7, 8, 9, 10, 20]:
-            #     y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=cv)
-            #     error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
-            #     min_error = min(min_error, error)
+            # # for cv in [2, 3, 4, 5, 6, 7, 8, 9, 10, 20]:
+            # y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=5)
+            # error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
+            # min_error = min(min_error, error)
             min_error = float("inf")
-            for alpha in [0.05, 0.5, 1, 2, 5, 10, 20, 50, 100]:
+            for alpha in [0.05, 0.5, 1, 2, 5, 10]:
                 model = Ridge(alpha=alpha)
                 y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=5)
                 error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
@@ -158,6 +158,10 @@ class EquivalencePredictor(object):
 
         df_output = pd.DataFrame(all_mse_list, columns=['date', 'closeness', 'betweenness', 'eigenvector', 'kcore'])
         print(df_output)
+        print('closeness avg: ', df_output['closeness'].mean())
+        print('betweenness avg: ', df_output['betweenness'].mean())
+        print('eigenvector avg: ', df_output['eigenvector'].mean())
+        print('kcore avg: ', df_output['kcore'].mean())
         output_file_path = os.path.join(self.output_base_path, method + '_mse_record.csv')
         df_output.to_csv(output_file_path, sep=',', index=False)
 
@@ -183,7 +187,7 @@ class EquivalencePredictor(object):
 
 
 if __name__ == '__main__':
-    dataset = 'jazz'
+    dataset = 'blogcatalog'
     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
                                    output_folder="equ_prediction_data", node_file="nodes_set/nodes.csv")
     # data_generator.generate_all_node_samples(worker=10)
@@ -191,12 +195,10 @@ if __name__ == '__main__':
     equivalence_predictor = EquivalencePredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                    equ_folder="equ_prediction_data", output_folder="equ_prediction_res", node_file="nodes_set/nodes.csv")
 
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
-    method_list = ['RWTGCN_S', 'RWTGCN_C']
-    # prob_list = [1]
-    # for prob in prob_list:
-    #     method_list.append('RWTGCN_prob_' + str(prob) + '_dur_10')
+    # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH']
+    method_list = ['CGCN_S']
+
     t1 = time.time()
-    equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=1)
+    equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=10)
     t2 = time.time()
-    print('node classification cost time: ', t2 - t1, ' seconds!')
+    print('equivalence prediction cost time: ', t2 - t1, ' seconds!')

@@ -18,7 +18,7 @@ class DataLoader:
         self.node_num = len(self.full_node_list)
         return
 
-    def get_date_adj_list(self, origin_base_path, start_idx, duration, alpha=1):
+    def get_date_adj_list(self, origin_base_path, start_idx, duration, data_type='tensor'):
         date_dir_list = sorted(os.listdir(origin_base_path))
         date_adj_list = []
         for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
@@ -26,8 +26,12 @@ class DataLoader:
             spmat = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
             # spmat = sp.coo_matrix((np.exp(alpha * spmat.data), (spmat.row, spmat.col)), shape=(self.node_num, self.node_num))
             spmat = get_normalize_adj(spmat)
-            sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
-            date_adj_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            if data_type == 'tensor':
+                sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
+                date_adj_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            elif data_type == 'matrix':
+                spmat = get_normalize_adj(spmat)
+                date_adj_list.append(spmat)
         # print(len(date_adj_list))
         return date_adj_list
 
@@ -46,7 +50,7 @@ class DataLoader:
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
                 tmp_adj_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
             core_adj_list.append(tmp_adj_list)
-        print('core_adj_list len: ', len(core_adj_list))
+        # print('core_adj_list len: ', len(core_adj_list))
         return core_adj_list
 
     def get_node_pair_list(self, walk_pair_base_path, start_idx, duration):
@@ -68,7 +72,7 @@ class DataLoader:
                 node_freq_list.append(json.load(fp))
         return node_freq_list
 
-    def get_degree_feature_list(self, origin_base_path, start_idx, duration):
+    def get_degree_feature_list(self, origin_base_path, start_idx, duration, init='gaussian'):
         x_list = []
         max_degree = 0
         degree_list = []
@@ -82,13 +86,24 @@ class DataLoader:
             degree_list.append(degrees)
             ret_degree_list.append(torch.FloatTensor(degrees).cuda() if torch.cuda.is_available() else degrees)
         for degrees in degree_list:
-            data = np.ones(degrees.shape[0], dtype=np.int)
-            row = np.arange(degrees.shape[0])
-            col = degrees.flatten().A[0]
-            # print('col shape:', col.shape)
-            spmat = sp.csr_matrix((data, (row, col)), shape=(degrees.shape[0], max_degree + 1))
-            sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
-            x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            if init == 'gaussian': # gaussian degree feature (has the best performance)
+                fea_list = []
+                for degree in degrees:
+                    fea_list.append(np.random.normal(degree / max_degree, 0.001, max_degree + 1))
+                fea_arr = np.array(fea_list)
+                fea_tensor = torch.FloatTensor(fea_arr)
+                x_list.append(fea_tensor.cuda() if torch.cuda.is_available() else fea_tensor)
+            elif init == 'one-hot': # one-hot degree feature
+                data = np.ones(degrees.shape[0], dtype=np.int)
+                row = np.arange(degrees.shape[0])
+                col = degrees.flatten().A[0]
+                # print('col shape:', col.shape)
+                spmat = sp.csr_matrix((data, (row, col)), shape=(degrees.shape[0], max_degree + 1))
+                sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
+                x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
+            # anthoer kind of x feature is adj feature, x_list = adj_list
+            else:
+                raise AttributeError('Unsupported feature initialization type!')
         print('max degree: ', max_degree + 1)
         return x_list, max_degree + 1, ret_degree_list
 

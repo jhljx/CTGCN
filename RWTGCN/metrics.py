@@ -27,7 +27,6 @@ class UnsupervisedLoss(nn.Module):
     def forward(self, embeddings, batch_node_idxs, loss_type='connection', structure_list=None):
         if isinstance(embeddings, list):
             timestamp_num = len(embeddings)
-            assert timestamp_num == len(self.node_pair_list)
         else: # tensor
             timestamp_num = embeddings.size()[0] if len(embeddings.size()) == 3 else 1
 
@@ -79,12 +78,14 @@ class UnsupervisedLoss(nn.Module):
         elif loss_type == 'structure':
             mse_loss = nn.MSELoss()
             structure_loss = Variable(torch.FloatTensor([0.]), requires_grad=True).cuda() if torch.cuda.is_available() else Variable(torch.FloatTensor([0.]), requires_grad=True)
+
             for i in range(timestamp_num):
                 if isinstance(embeddings, list) or len(embeddings.size()) == 3:
                     embedding_mat = embeddings[i]
+                    structure_mat = structure_list[i]
                 else:
                     embedding_mat = embeddings
-                structure_mat = structure_list[i]
+                    structure_mat = structure_list
                 structure_loss = structure_loss + mse_loss(structure_mat[batch_node_idxs], embedding_mat[batch_node_idxs])
             return structure_loss
             #return self.reconstruct_loss(embeddings, batch_node_idxs, timestamp_num, structure_list)
