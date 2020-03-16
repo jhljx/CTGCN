@@ -74,24 +74,25 @@ class DataGenerator(object):
                     key = (to_id, from_id)
                     all_edge_dict[key] = 1
                     edge_list.append([to_id, from_id, 1])
-                edges = np.array(edge_list)
-                del edge_list
-                edge_num = edges.shape[0]
 
-                all_edge_idxs = np.arange(edge_num)
-                np.random.shuffle(all_edge_idxs)
-                test_num = int(np.floor(edge_num * self.test_ratio))
-                val_num = int(np.floor(edge_num * self.val_ratio))
-                train_num = edge_num - test_num - val_num
+            edges = np.array(edge_list)
+            del edge_list
+            edge_num = edges.shape[0]
 
-                val_edges = edges[all_edge_idxs[ : val_num]]
-                test_edges = edges[all_edge_idxs[val_num : val_num + test_num]]
-                train_edges = edges[all_edge_idxs[val_num + test_num : ]]
-                del edges
+            all_edge_idxs = np.arange(edge_num)
+            np.random.shuffle(all_edge_idxs)
+            test_num = int(np.floor(edge_num * self.test_ratio))
+            val_num = int(np.floor(edge_num * self.val_ratio))
+            train_num = edge_num - test_num - val_num
 
-                train_edges = self.get_neg_edge_samples(train_edges, train_num, all_edge_dict)
-                test_edges = self.get_neg_edge_samples(test_edges, test_num, all_edge_dict)
-                val_edges = self.get_neg_edge_samples(val_edges, val_num, all_edge_dict)
+            val_edges = edges[all_edge_idxs[ : val_num]]
+            test_edges = edges[all_edge_idxs[val_num : val_num + test_num]]
+            train_edges = edges[all_edge_idxs[val_num + test_num : ]]
+            del edges
+
+            train_edges = self.get_neg_edge_samples(train_edges, train_num, all_edge_dict)
+            test_edges = self.get_neg_edge_samples(test_edges, test_num, all_edge_dict)
+            val_edges = self.get_neg_edge_samples(val_edges, val_num, all_edge_dict)
 
             train_output_path = os.path.join(self.output_base_path, date + '_train.csv')
             df_train = pd.DataFrame(train_edges, columns=['from_id', 'to_id', 'label'])
@@ -262,13 +263,13 @@ def process_result(dataset, rep_num, method_list):
         base_path = os.path.join('../../data/' + dataset, 'link_prediction_res_0')
         res_path = os.path.join(base_path, method + '_auc_record.csv')
         df_method = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg0', 'had0', 'l1_0', 'l2_0'])
-        df_avg = df_method.loc[:, [date, 'avg0']].copy()
-        df_had = df_method.loc[:, [date, 'had0']].copy()
-        df_l1 = df_method.loc[:, [date, 'l1_0']].copy()
-        df_l2 = df_method.loc[:, [date, 'l2_0']].copy()
+        df_avg = df_method.loc[:, ['date', 'avg0']].copy()
+        df_had = df_method.loc[:, ['date', 'had0']].copy()
+        df_l1 = df_method.loc[:, ['date', 'l1_0']].copy()
+        df_l2 = df_method.loc[:, ['date', 'l2_0']].copy()
         for i in range(1, rep_num):
-            base_path = os.path.join('../../data/' + dataset, 'node_classification_res_' + str(i))
-            res_path = os.path.join(base_path, method + '_acc_record.csv')
+            base_path = os.path.join('../../data/' + dataset, 'link_prediction_res_' + str(i))
+            res_path = os.path.join(base_path, method + '_auc_record.csv')
             df_rep = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg' + str(i), 'had' + str(i), 'l1_' + str(i), 'l2_' + str(i)])
             df_avg = pd.concat([df_avg, df_rep.loc[:, ['avg' + str(i)]]], axis=1)
             df_had = pd.concat([df_had, df_rep.loc[:, ['had' + str(i)]]], axis=1)
@@ -307,23 +308,22 @@ def process_result(dataset, rep_num, method_list):
 
 
 if __name__ == '__main__':
-    dataset = 'facebook'
-    rep_num = 1
+    dataset = 'enron'
+    rep_num = 20
 
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCN', 'RWTGCN_C', 'CGCN_C']
-    # method_list = ['GAT']
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN',  'dyGEM', 'timers', 'EvolveGCNH', 'RWTGCN_C', 'CGCN_C', 'CGCN_S']
+    # method_list = ['CGCN_S', 'dyGEM']
 
-    for i in range(rep_num):
-        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
-                                       output_folder="link_prediction_data", node_file="nodes_set/nodes.csv")
-        # data_generator.generate_edge_samples()
+    # for i in range(0, rep_num):
+    #     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+    #                                    output_folder="link_prediction_data_" + str(i), node_file="nodes_set/nodes.csv")
+    #     # data_generator.generate_edge_samples()
+    #     link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+    #                                    lp_edge_folder="link_prediction_data_" + str(i), output_folder="link_prediction_res_" + str(i), node_file="nodes_set/nodes.csv",
+    #                                    train_ratio=1.0, test_ratio=1.0)
+    #     t1 = time.time()
+    #     link_predictor.link_prediction_all_method(method_list=method_list, worker=10)
+    #     t2 = time.time()
+    #     print('link prediction cost time: ', t2 - t1, ' seconds!')
 
-        link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
-                                       lp_edge_folder="link_prediction_data", output_folder="link_prediction_res", node_file="nodes_set/nodes.csv",
-                                       train_ratio=1.0, test_ratio=1.0)
-        t1 = time.time()
-        link_predictor.link_prediction_all_method(method_list=method_list, worker=-1)
-        t2 = time.time()
-        print('link prediction cost time: ', t2 - t1, ' seconds!')
-
-    # process_result(dataset, rep_num, method_list)
+    process_result(dataset, rep_num, method_list)

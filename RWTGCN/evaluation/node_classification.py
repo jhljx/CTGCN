@@ -218,7 +218,7 @@ def process_result(dataset, rep_num, method_list):
         df_method.to_csv(output_path, sep=',', index=False)
 
 if __name__ == '__main__':
-    dataset = 'america_air'
+    dataset = 'europe_air'
     rep_num = 20
 
     # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
@@ -226,7 +226,7 @@ if __name__ == '__main__':
     # prob_list = [0]
     # for prob in prob_list:
     #     method_list.append('RWTGCN_prob_' + str(prob))
-    method_list = ['RWTGCN_S']
+    method_list = ['GAT']
 
     t1 = time.time()
     for i in range(rep_num):

@@ -59,7 +59,7 @@ def evolvegcn_process(dataset, worker=-1):
 
     t1 = time.time()
     processing = Processing(base_path=base_path, origin_folder=origin_folder, core_folder=None,
-                            walk_pair_folder='rwtgcn_walk_pairs', node_freq_folder='rwtgcn_node_freq', node_file=node_file,
+                            walk_pair_folder='evolvegcn_walk_pairs', node_freq_folder='evolvegcn_node_freq', node_file=node_file,
                             walk_time=10, walk_length=5)
     processing.run(worker=worker)
     t2 = time.time()
@@ -92,7 +92,10 @@ def rwtgcn_process(dataset, worker=-1, calc_structure=True):
     print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
-    dataset = 'blogcatalog'
-    worker = 10
+    dataset = 'facebook'
+    worker = 30
+    #gcn_process(dataset=dataset, worker=worker)
     #gat_process(dataset=dataset, worker=worker)
-    cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
+    #evolvegcn_process(dataset=dataset, worker=worker)
+    # cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
+    rwtgcn_process(dataset=dataset, worker=worker, calc_structure=True)

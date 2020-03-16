@@ -1,337 +1,434 @@
 import numpy as np
 import pandas as pd
-import os, datetime
+import os, datetime, sys, time, multiprocessing
 import scipy.sparse as sp
 from sklearn.cluster import SpectralClustering, MiniBatchKMeans
+from sklearn import preprocessing
+from sklearn.linear_model import LogisticRegression
 from sklearn.cluster import KMeans
 from collections import Counter
 from scipy.spatial.distance import cdist
 from sklearn.metrics import roc_auc_score
-from RWTGCN.utils import check_and_make_path
+sys.path.append("..")
+from RWTGCN.utils import check_and_make_path, get_sp_adj_mat
 
 class DataGenerator(object):
     base_path: str
     input_base_path: str
     output_base_path: str
+    full_node_list: list
+    node_num: int
+    train_ratio: float
+    val_ratio: float
+    anomaly_ratio: float
 
-    def __init__(self, base_path, input_folder, output_folder, ):
+    def __init__(self, base_path, input_folder, output_folder, node_file, train_ratio=0.5, val_ratio=0.2, anomaly_ratio=0.1):
         self.base_path = base_path
         self.input_base_path = os.path.join(base_path, input_folder)
         self.output_base_path = os.path.join(base_path, output_folder)
 
+        nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
+        self.full_node_list = nodes_set['node'].tolist()
+        self.node_num = len(self.full_node_list)
+        assert 0 < train_ratio < 1 and 0 < anomaly_ratio < 1
+        self.train_ratio = train_ratio
+        self.val_ratio = val_ratio
+        self.anomaly_ratio = anomaly_ratio
+
+        check_and_make_path(self.input_base_path)
+        check_and_make_path(self.output_base_path)
         return
 
-    def processEdges(self, fake_edges, data):
-        """
-        remove self-loops and duplicates and order edge
-        :param fake_edges: generated edge list
-        :param data: orginal edge list
-        :return: list of edges
-        """
-        idx_fake = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] > 0)
+    #S = VS(A, 0.9, 100)
+    # S = (S + S.T) / 2
+    def get_vertex_similarity(self, A, alpha, iter_num=100, normalize=False):
+        """the implement of Vertex similarity in networks"""
+        import scipy
+        assert 0 < alpha < 1
+        assert type(A) is scipy.sparse.csr.csr_matrix
+        lambda_1 = scipy.sparse.linalg.eigsh(A, k=1, which='LM', return_eigenvectors=False)[0]
+        n = A.shape[0]
+        d = np.array(A.sum(1)).flatten()
+        def inv(x):
+            if x == 0:
+                return x
+            return 1. / x
+        inv_func = np.vectorize(inv)
+        d_inv = np.diag(inv_func(d))
+        dsd = np.random.normal(0, 1 / np.sqrt(n), (n, n))
+        # dsd = np.zeros((n, n))
+        I = np.eye(n)
+        for i in range(iter_num):
+            dsd = alpha / lambda_1 * A.dot(dsd) + I
+            if i % 10 == 0:
+                print('VS', i, '/', iter_num)
+        if normalize == False:
+            return dsd
+        return d_inv.dot(dsd).dot(d_inv)
 
-        tmp = fake_edges[idx_fake]
-        tmp[:, [0, 1]] = tmp[:, [1, 0]]
-
-        fake_edges[idx_fake] = tmp
-
-        idx_remove_dups = np.nonzero(fake_edges[:, 0] - fake_edges[:, 1] < 0)
-
-        fake_edges = fake_edges[idx_remove_dups]
-        a = fake_edges.tolist()
-        b = data.tolist()
-        c = []
-
-        for i in a:
-            if i not in b:
-                c.append(i)
-        fake_edges = np.array(c)
-        return fake_edges
-
-
-    def edgeList2Adj(self, data):
-        """
-        converting edge list to graph adjacency matrix
-        :param data: edge list
-        :return: adjacency matrix which is symmetric
-        """
-
-        data = tuple(map(tuple, data))
-
-        n = max(max(user, item) for user, item in data)  # Get size of matrix
-        # print(n)
-        matrix = np.zeros((n, n))
-        for user, item in data:
-            matrix[user - 1][item - 1] = 1  # Convert to 0-based index.
-            matrix[item - 1][user - 1] = 1  # Convert to 0-based index.
-        return matrix
-
-    def anomaly_generation(self, ini_graph_percent, anomaly_percent, data, n, m):
-        """ generate anomaly
-        split the whole graph into training network which includes parts of the
-        whole graph edges(with ini_graph_percent) and testing edges that includes
-        a ratio of manually injected anomaly edges, here anomaly edges mean that
-        they are not shown in previous graph;
-         input: ini_graph_percent: percentage of edges in the whole graph will be
-                                    sampled in the intitial graph for embedding
-                                    learning
-                anomaly_percent: percentage of edges in testing edges pool to be
-                                  manually injected anomaly edges(previous not
-                                  shown in the whole graph)
-                data: whole graph matrix in sparse form, each row (nodeID,
-                      nodeID) is one edge of the graph
-                n:  number of total nodes of the whole graph
-                m:  number of edges in the whole graph
-         output: synthetic_test: the testing edges with injected abnormal edges,
-                                 each row is one edge (nodeID, nodeID, label),
-                                 label==0 means the edge is normal one, label ==1
-                                 means the edge is abnormal;
-                 train_mat: the training network with square matrix format, the training
-                            network edges for initial model training;
-                 train:  the sparse format of the training network, each row
-                            (nodeID, nodeID)
-        """
-        np.random.seed(1)
-        print('[#s] generating anomalous dataset...\n', datetime.datetime.now())
-        print('[#s] initial network edge percent: #.1f##, anomaly percent: #.1f##.\n', datetime.datetime.now(),
-              ini_graph_percent * 100, anomaly_percent * 100)
-
-        train_num = int(np.floor(ini_graph_percent * m))
-
-        # select part of edges as in the training set
-        train = data[0:train_num, :]
-
-        # select the other edges as the testing set
-        test = data[train_num:, :]
-
-        # data to adjacency_matrix
-        adjacency_matrix = self.edgeList2Adj(data)
-
-        # clustering nodes to clusters using spectral clustering
-        kk = 3  # 10#42#42
-
-        # mark
-        # sc = SpectralClustering(kk, affinity='precomputed', n_init=100, assign_labels='discretize')
-        sc = MiniBatchKMeans(n_clusters=kk)
-        labels = sc.fit_predict(adjacency_matrix)
-
-        # generate fake edges that are not exist in the whole graph, treat them as
-        # anamalies
-        idx_1 = np.expand_dims(np.transpose(np.random.choice(n, m)), axis=1)
-        idx_2 = np.expand_dims(np.transpose(np.random.choice(n, m)), axis=1)
-        generate_edges = np.concatenate((idx_1, idx_2), axis=1)
-
-        ####### genertate abnormal edges ####
-        fake_edges = np.array([x for x in generate_edges if labels[x[0] - 1] != labels[x[1] - 1]])
-
-        fake_edges = self.processEdges(fake_edges, data)
-
-        # anomaly_num = 12  # int(np.floor(anomaly_percent * np.size(test, 0)))
-        anomaly_num = int(np.floor(anomaly_percent * np.size(test, 0)))
-        anomalies = fake_edges[0:anomaly_num, :]
-
-        idx_test = np.zeros([np.size(test, 0) + anomaly_num, 1], dtype=np.int32)
-        # randsample: sample without replacement
-        # it's different from datasample!
-
-        anomaly_pos = np.random.choice(np.size(idx_test, 0), anomaly_num, replace=False)
-
-        # anomaly_pos = np.random.choice(100, anomaly_num, replace=False) + 200
-        idx_test[anomaly_pos] = 1
-        synthetic_test = np.concatenate((np.zeros([np.size(idx_test, 0), 2], dtype=np.int32), idx_test), axis=1)
-
-        idx_anomalies = np.nonzero(idx_test.squeeze() == 1)
-        idx_normal = np.nonzero(idx_test.squeeze() == 0)
-
-        synthetic_test[idx_anomalies, 0:2] = anomalies
-        synthetic_test[idx_normal, 0:2] = test
-
-        train_mat = sp.csr_matrix((np.ones([np.size(train, 0)], dtype=np.int32), (train[:, 0], train[:, 1])),
-                                  shape=(n, n))
-        # sparse(train(:,1), train(:,2), ones(length(train), 1), n, n) #TODO: node addition
-        train_mat = train_mat + train_mat.transpose()
-        return synthetic_test, train_mat, train
-
-    def dynamic_anomaly_generation(self, data_path, sample_path, init_percent=0.8, anomaly_rate=0.2):
-        check_and_make_path(sample_path)
-        # 字母前缀个数(要转成数字才能进行array操作，把前缀删掉)
-        delete_prefix_num = 1
-        f_list = os.listdir(data_path)
-        length = len(f_list)
-        for i, f_name in enumerate(f_list):
-            print(str(length - i) + " file(s) left")
-            dataframe = pd.read_csv(os.path.join(data_path, f_name), sep='\t')
-            nodes_set = pd.concat([dataframe['from_id'], dataframe['to_id']], axis=0).drop_duplicates()
-            if len(nodes_set) < 10:
+    def get_anomaly_edge_samples(self, pos_edges, anomaly_num, all_edge_dict, cluster_arr):
+        anomaly_edge_dict = dict()
+        anomaly_edge_list = []
+        cnt = 0
+        while cnt < anomaly_num:
+            from_id = np.random.choice(self.node_num)
+            to_id = np.random.choice(self.node_num)
+            if from_id == to_id:
                 continue
-            full_node_list = nodes_set.values.tolist()
-            nodes_set_only_num = np.array(nodes_set.map(lambda x: x[delete_prefix_num:])).astype(int)
-            sort = np.argsort(nodes_set_only_num)
-            dataframe['from_id'] = dataframe['from_id'].map(lambda x: x[delete_prefix_num:]).astype(int)
-            dataframe['to_id'] = dataframe['to_id'].map(lambda x: x[delete_prefix_num:]).astype(int)
-            dataframe['from_id'] = sort[np.searchsorted(nodes_set_only_num, dataframe['from_id'], sorter=sort)]
-            dataframe['to_id'] = sort[np.searchsorted(nodes_set_only_num, dataframe['to_id'], sorter=sort)]
+            if (from_id, to_id) in all_edge_dict or (to_id, from_id) in all_edge_dict:
+                continue
+            if (from_id, to_id) in anomaly_edge_dict or (to_id, from_id) in anomaly_edge_dict:
+                continue
+            if cluster_arr[from_id] == cluster_arr[to_id]:
+                continue
+            anomaly_edge_list.append([from_id, to_id, 0])
+            cnt += 1
+        anomaly_edges = np.array(anomaly_edge_list)
+        all_edges = np.vstack([pos_edges, anomaly_edges])
+        all_edge_idxs = np.arange(all_edges.shape[0])
+        np.random.shuffle(all_edge_idxs)
+        all_edges = all_edges[all_edge_idxs, :]
+        return all_edges
 
-            edges = np.array(dataframe[["from_id", "to_id"]])
-            # edges = np.loadtxt(data_path, dtype=int, comments='%')
-            vertices = np.unique(edges)
-            m = len(edges)
-            n = len(vertices)
-            synthetic_test, train_mat, train = self.anomaly_generation(init_percent, anomaly_rate, edges, n, m)
+    def generate_node_samples(self):
+        print('Start generating node samples!')
+        node_arr = np.arange(self.node_num)
 
-            df_train = pd.DataFrame(data=train, columns=['from_id', 'to_id', "label"])
-            df_train['from_id'] = df_train["from_id"].map(lambda x: full_node_list[x])
-            df_train['to_id'] = df_train["to_id"].map(lambda x: full_node_list[x])
-            df_train.to_csv(os.path.join(sample_path, os.path.splitext(f_name)[0] + '_train.csv'))
+        f_list = sorted(os.listdir(self.input_base_path))
+        for i, file in enumerate(f_list):
+            file_path = os.path.join(self.input_base_path, file)
+            date = file.split('.')[0]
+            spadj = get_sp_adj_mat(file_path, self.full_node_list)
+            degrees = spadj.sum(axis=1).flatten().A[0].astype(np.int)
+            spadj = spadj.tolil()
+            node_neighbor_arr = spadj.rows
+            degree_ranks = degrees.argsort()[::-1]
 
-            df_test = pd.DataFrame(data=synthetic_test, columns=['from_id', 'to_id', "label"])
-            df_test['from_id'] = df_test["from_id"].map(lambda x: full_node_list[x])
-            df_test['to_id'] = df_test["to_id"].map(lambda x: full_node_list[x])
-            df_test.to_csv(os.path.join(sample_path, os.path.splitext(f_name)[0] + '_test.csv'))
+            anomaly_num = int(np.floor(self.node_num * self.anomaly_ratio))
+            cnt, j = 0, 0
+            anomaly_list = []
+            anomaly_dict = dict()
+            while cnt < anomaly_num:
+                cur = degree_ranks[j]
+                j += 1
+                if cur not in anomaly_dict:
+                    anomaly_dict[cur] = 1
+                    anomaly_list.append(cur)
+                    cnt += 1
+
+                neighbor_arr = node_neighbor_arr[cur]
+                neighbor_num = len(neighbor_arr)
+                sample_num = np.random.randint(1, neighbor_num // 2)
+                sample_arr = np.random.choice(neighbor_arr, sample_num, replace=False)
+                for nidx in sample_arr:
+                    if nidx not in anomaly_dict:
+                        anomaly_dict[nidx] = 1
+                        anomaly_list.append(nidx)
+                        cnt += 1
+
+            labels = np.zeros(self.node_num, dtype=np.int)
+            labels[anomaly_list] = 1
+
+            node_idxs = np.arange(self.node_num)
+            data = np.vstack((node_idxs, labels)).T
+            np.random.shuffle(node_idxs)
+            train_num = int(np.floor(self.node_num * self.train_ratio))
+            val_num = int(np.floor(self.node_num * self.val_ratio))
+
+            train_data = data[node_idxs[ : train_num]]
+            val_data = data[node_idxs[train_num: train_num + val_num]]
+            test_data = data[node_idxs[train_num + val_num: ]]
+
+            train_output_path = os.path.join(self.output_base_path, date + '_train.csv')
+            df_train = pd.DataFrame(train_data, columns=['node', 'label'])
+            df_train.to_csv(train_output_path, sep='\t', index=False)
+
+            test_output_path = os.path.join(self.output_base_path, date + '_test.csv')
+            df_test = pd.DataFrame(test_data, columns=['node', 'label'])
+            df_test.to_csv(test_output_path, sep='\t', index=False)
+
+            val_output_path = os.path.join(self.output_base_path, date + '_val.csv')
+            df_val = pd.DataFrame(val_data, columns=['node', 'label'])
+            df_val.to_csv(val_output_path, sep='\t', index=False)
+
+    def generate_edge_samples(self):
+        print('Start generating edge samples!')
+        node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num).tolist()))
+
+        f_list = sorted(os.listdir(self.input_base_path))
+        for i, file in enumerate(f_list):
+            file_path = os.path.join(self.input_base_path, file)
+            date = file.split('.')[0]
+            all_edge_dict = dict()
+            edge_list = []
+            adj = np.zeros((self.node_num, self.node_num), dtype=np.int)
+
+            with open(file_path, 'r') as fp:
+                content_list = fp.readlines()
+                for line in content_list[1:]:
+                    edge = line.strip().split('\t')
+                    from_id = node2idx_dict[edge[0]]
+                    to_id = node2idx_dict[edge[1]]
+                    key = (from_id, to_id)
+                    all_edge_dict[key] = 1
+                    adj[from_id, to_id] = 1
+                    edge_list.append([from_id, to_id, 1])
+                    key = (to_id, from_id)
+                    all_edge_dict[key] = 1
+                    adj[to_id, from_id] = 1
+                    edge_list.append([to_id, from_id, 1])
+            # for i in range(self.node_num):
+            #     adj[i, i] = 1
+            kk = 10 # 10#42#42
+            #model = KMeans(n_clusters=kk)
+            model = SpectralClustering(kk, affinity='precomputed', n_init=100, assign_labels='discretize')
+            cluster_arr = model.fit_predict(adj)
+
+            edges = np.array(edge_list)
+            del edge_list
+            edge_num = edges.shape[0]
+
+            all_edge_idxs = np.arange(edge_num)
+            np.random.shuffle(all_edge_idxs)
+            train_num = int(np.floor(edge_num * self.train_ratio))
+            test_num = edge_num - train_num
+
+            train_edges = edges[all_edge_idxs[ : train_num]]
+            test_edges = edges[all_edge_idxs[train_num : ]]
+            del edges
+            anomaly_num = int(np.floor(test_num * self.anomaly_ratio))
+            test_edges = self.get_anomaly_edge_samples(test_edges, anomaly_num, all_edge_dict, cluster_arr)
+
+            train_output_path = os.path.join(self.output_base_path, date + '_train.csv')
+            df_train = pd.DataFrame(train_edges, columns=['from_id', 'to_id', 'label'])
+            df_train.to_csv(train_output_path, sep='\t', index=False)
+
+            test_output_path = os.path.join(self.output_base_path, date + '_test.csv')
+            df_test = pd.DataFrame(test_edges, columns=['from_id', 'to_id', 'label'])
+            df_test.to_csv(test_output_path, sep='\t', index=False)
+        print('Generate edge samples finish!')
 
 class AnomalyDetector(object):
     base_path: str
-    input_base_path: str
+    origin_base_path: str
+    origin_base_path: str
+    embedding_base_path: str
+    ad_edge_base_path: str
     output_base_path: str
+    full_node_list: list
+    train_ratio: float
+    test_ratio: float
 
-    def __init__(self, base_path, input_folder, output_folder,):
+    def __init__(self, base_path, origin_folder, embedding_folder, ad_edge_folder, output_folder, node_file):
         self.base_path = base_path
-        self.input_base_path = os.path.join(base_path, input_folder)
+        self.origin_base_path = os.path.join(base_path, origin_folder)
+        self.embedding_base_path = os.path.join(base_path, embedding_folder)
+        self.ad_edge_base_path = os.path.join(base_path, ad_edge_folder)
         self.output_base_path = os.path.join(base_path, output_folder)
+
+        nodes_set = pd.read_csv(os.path.join(base_path, node_file), names=['node'])
+        self.full_node_list = nodes_set['node'].tolist()
+
+        check_and_make_path(self.embedding_base_path)
+        check_and_make_path(self.origin_base_path)
+        check_and_make_path(self.output_base_path)
         return
 
-    def anomaly_detection(self, embedding, train, synthetic_test, k, encoding_method='Hadamard'):
-        """
-        function anomaly_detection_stream(embedding, train, synthetic_test, k, alfa, n0, c0)
-        #  the function generate codes of edges by combining embeddings of two
-        #  nodes, and then using the testing codes of edges for anomaly detection
-        #  Input: embedding: embeddings of each node; train: training edges; synthetic_test: testing edges with anomlies;
-                    k: number of clusters
-        #  return scores: The anomaly severity ranking, the top-ranked are the most likely anomlies
-        #   auc: AUC score
-        #   n:   number of nodes in each cluster
-        #   c:   cluster centroids,
-        #   res: id of nodes if their distance to nearest centroid is larger than that in the training set
-        #   ab_score: anomaly score for the whole snapshot, just the sum of distances to their nearest centroids
-        """
-        print('[#s] edge encoding...\n', datetime.datetime.now())
-        src = embedding[train[:, 0] - 1, :]
-        dst = embedding[train[:, 1] - 1, :]
-        test_src = embedding[synthetic_test[:, 0] - 1, :]
-        test_dst = embedding[synthetic_test[:, 1] - 1, :]
+    def train(self, train_nodes, val_nodes, embeddings):
+        #print('Start training!')
+        train_feature = embeddings[train_nodes[:, 0], :]
+        val_feature = embeddings[val_nodes[:, 0], :]
+        train_labels = train_nodes[:, 1]
+        val_labels = val_nodes[:, 1]
 
-        # the edge encoding
-        # refer node2vec paper for details
-        codes = np.multiply(src, dst)
-        test_codes = np.multiply(test_src, test_dst)
-        if encoding_method == 'Average':
-            codes = (src + dst) / 2
-            test_codes = (test_src + test_dst) / 2
-        elif encoding_method == 'Hadamard':
-            codes = np.multiply(src, dst)
-            test_codes = np.multiply(test_src, test_dst)
-        elif encoding_method == 'WeightedL1':
-            codes = abs(src - dst)
-            test_codes = abs(test_src - test_dst)
-        elif encoding_method == 'WeightedL2':
-            codes = (src - dst) ** 2
-            test_codes = (test_src - test_dst) ** 2
+        models = []
+        for C in [0.01, 0.1, 1, 5, 10, 20]:
+            model = LogisticRegression(C=C, solver='lbfgs', max_iter=5000, class_weight='balanced')
+            model.fit(train_feature, train_labels)
+            models.append(model)
+        best_auc = 0
+        model_idx = -1
+        for i, model in enumerate(models):
+            val_pred = model.predict_proba(val_feature)[:, 1]
+            auc = roc_auc_score(val_labels, val_pred)
+            if  auc >= best_auc:
+                best_auc = auc
+                model_idx = i
+        # print('best acc: ', best_acc)
+        best_model = models[model_idx]
+        #print('Finish training!')
+        return best_model
 
-        print('[#s] anomaly detection...\n', datetime.datetime.now())
+    def test(self, test_nodes, embeddings, model, date):
+        test_feature = embeddings[test_nodes[:, 0], :]
+        test_labels = test_nodes[:, 1]
 
-        # conducting k-means clustering and recording centroids of different
-        # clusters
-        kmeans = KMeans(n_clusters=k)
-        # Fitting the input data
-        kmeans = kmeans.fit(codes)
-        # Getting the cluster labels
-        indices = kmeans.predict(codes)
-        # Centroid values
-        centroids = kmeans.cluster_centers_
-        # [indices, centroids] = kmeans(codes, k)
-        # tbl = tabulate(indices)
-        # c = dict.fromkeys(indices, 0)
-        #
-        # for x in indices:
-        #     c[x] += 1
-        tbl = Counter(indices)
-        n = list(tbl.values())
-        c = centroids
-        assert (len(n) == k)
-        labels = synthetic_test[:, 2]
-        # calculating distances for testing edge codes to centroids of clusters
-        dist_center = cdist(test_codes, c)
-        # assinging each testing edge code to nearest centroid
-        min_dist = np.min(dist_center, 1)
-        # sorting distances of testing edges to their nearst centroids
-        scores = min_dist.argsort()
-        scores = scores[::-1]
-        # calculating auc score of anomly detection task, in case that all labels are 0's or all 1's
-        if np.sum(labels) == 0:
-            labels[0] = 1
-        elif np.sum(labels) == len(labels):
-            labels[0] = 0
-        auc = roc_auc_score(labels, min_dist)
-        # calculating distances for testing edge codes to centroids of clusters
-        dist_center_tr = cdist(codes, c)
-        min_dist_tr = np.min(dist_center_tr, 1)
-        max_dist_tr = np.max(min_dist_tr)
-        res = [1 if x > max_dist_tr else 0 for x in min_dist]
-        # ab_score = np.sum(res)/(1e-10 + len(res))
-        ab_score = np.sum(min_dist) / (1e-10 + len(min_dist))
-        return scores, auc, n, c, res, ab_score
+        auc_list = [date]
+        test_pred = model.predict_proba(test_feature)[:, 1]
+        auc_list.append(roc_auc_score(test_labels, test_pred))
+        return auc_list
 
-    def anomaly_detection_all_time(self, embedding_path, sample_path, auc_path, k=2):
-        # 字母前缀个数(要转成数字才能进行array操作，把前缀删掉)
-        f_list = os.listdir(embedding_path)
-        length = len(f_list)
-        operation_list = ['Average', 'Hadamard', 'WeightedL1', 'WeightedL2']
-        for i, embedding_name in enumerate(f_list):
-            print(str(length - i) + " dir(s) left")
-            embedding_vec_path = os.path.join(embedding_path, embedding_name)
-            embedding_f_list = os.listdir(embedding_vec_path)
-            time_length = len(embedding_f_list)
+    # def get_edge_feature(self, edge_arr, embedding_arr):
+    #     avg_edges, had_edges, l1_edges, l2_edges = [], [], [], []
+    #     for i, edge in enumerate(edge_arr):
+    #         from_id, to_id = edge[0], edge[1]
+    #         avg_edges.append((embedding_arr[from_id] + embedding_arr[to_id]) / 2)
+    #         had_edges.append(embedding_arr[from_id] * embedding_arr[to_id])
+    #         l1_edges.append(np.abs(embedding_arr[from_id] - embedding_arr[to_id]))
+    #         l2_edges.append((embedding_arr[from_id] - embedding_arr[to_id]) ** 2)
+    #     avg_edges = np.array(avg_edges)
+    #     had_edges = np.array(had_edges)
+    #     l1_edges = np.array(l1_edges)
+    #     l2_edges = np.array(l2_edges)
+    #     feature_dict = {'Avg': avg_edges, 'Had': had_edges, 'L1': l1_edges, 'L2': l2_edges}
+    #     return feature_dict
+    #
+    # def train(self, train_edges, embeddings):
+    #     #print('Start training!')
+    #     train_feature_dict = self.get_edge_feature(train_edges, embeddings)
+    #     k = 10
+    #     measure_list = ['Avg', 'Had', 'L1', 'L2']
+    #     centroid_dict = dict()
+    #     for measure in measure_list:
+    #         model = KMeans(n_clusters=k)
+    #         model = model.fit(train_feature_dict[measure])
+    #         centroids = model.cluster_centers_
+    #         centroid_dict[measure] = centroids
+    #     #print('Finish training!')
+    #     return centroid_dict
+    #
+    # def test(self, test_edges, embeddings, centroid_dict, date):
+    #     #print('Start testing!')
+    #     test_labels = test_edges[:, 2]
+    #     test_feature_dict = self.get_edge_feature(test_edges, embeddings)
+    #     auc_list = [date]
+    #     measure_list = ['Avg', 'Had', 'L1', 'L2']
+    #     for measure in measure_list:
+    #         dist_center_arr = cdist(test_feature_dict[measure], centroid_dict[measure])
+    #         min_dist_arr =  np.min(dist_center_arr, 1)
+    #         auc_list.append(roc_auc_score(test_labels, min_dist_arr))
+    #     #print('Finish testing!')
+    #     return auc_list
 
-            auc_dict = dict(zip(operation_list, [[]] * 4))
-            auc_dict['time'] = []
-            for j, f_name in enumerate(embedding_f_list):
-                print(str(time_length - j) + " file(s) left")
-                df_embedding = pd.read_csv(os.path.join(embedding_vec_path, f_name), sep='\t')
-                full_node_list = df_embedding.index.tolist()
-                node_idx_list = np.arange(len(full_node_list)).tolist()
-                node2idx_dict = dict(zip(full_node_list, node_idx_list))
+    def anomaly_detection_all_time(self, method):
+        print('method = ', method)
+        f_list = sorted(os.listdir(self.origin_base_path))
 
-                df_train = pd.read_csv(os.path.join(sample_path, os.path.splitext(f_name)[0] + '_train.csv'), sep='\t')
-                df_test = pd.read_csv(os.path.join(sample_path, os.path.splitext(f_name)[0] + '_test.csv'), sep='\t')
-                df_train['from_id'] = df_train['from_id'].map(lambda x: node2idx_dict[x])
-                df_train['to_id'] = df_train['to_id'].map(lambda x: node2idx_dict[x])
-                df_test['from_id'] = df_test['from_id'].map(lambda x: node2idx_dict[x])
-                df_test['to_id'] = df_test['to_id'].map(lambda x: node2idx_dict[x])
+        all_auc_list = []
+        for i, f_name in enumerate(f_list):
+            if i == 0:
+                continue
+            print('Current date is: {}'.format(f_name))
+            date = f_name.split('.')[0]
+            train_data = pd.read_csv(os.path.join(self.ad_edge_base_path, date + '_train.csv'), sep='\t').values
+            val_data = pd.read_csv(os.path.join(self.ad_edge_base_path, date + '_test.csv'), sep='\t').values
+            test_data = pd.read_csv(os.path.join(self.ad_edge_base_path, date + '_test.csv'), sep='\t').values
+            # train_edges = pd.read_csv(os.path.join(self.ad_edge_base_path, date + '_train.csv'), sep='\t').values
+            # test_edges = pd.read_csv(os.path.join(self.ad_edge_base_path, date + '_test.csv'), sep='\t').values
+            if not os.path.exists(os.path.join(self.embedding_base_path, method, f_name)):
+                continue
+            df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, f_name), sep='\t', index_col=0)
+            df_embedding  = df_embedding.loc[self.full_node_list]
+            embeddings = df_embedding.values
 
-                embedding, train, synthetic_test = df_embedding.values, df_train.values, df_test.values
-                auc_dict['time'].append(os.path.splitext(f_name)[0])
-                for operation in operation_list:
-                    scores, auc, n, c, _, _ = self.anomaly_detection(embedding, train, synthetic_test, k,
-                                                                encoding_method=operation)
-                    auc_dict[operation].append(auc)
-            auc_embedding_dir_path = os.path.join(auc_path, embedding_name)
-            check_and_make_path(auc_embedding_dir_path)
-            df_auc = pd.DataFrame(auc_dict)
-            df_auc = df_auc[['time', 'Average', 'Hadamard', 'WeightedL1', 'WeightedL2']]
-            df_auc.to_csv(os.path.join(auc_embedding_dir_path, embedding_name + '_auc.csv'), sep=',', index=False)
+            #lb = preprocessing.LabelBinarizer()
+            #lb.fit([0, 1])
+            model = self.train(train_data, val_data, embeddings)
+            auc_list = self.test(test_data, embeddings, model, date)
+            # centroid_dict = self.train(train_edges, embeddings)
+            # auc_list = self.test(test_edges, embeddings, centroid_dict, date)
+            all_auc_list.append(auc_list)
 
+        # df_output = pd.DataFrame(all_auc_list, columns=['date', 'Avg', 'Had', 'L1', 'L2'])
+        df_output = pd.DataFrame(all_auc_list, columns=['date', 'auc'])
+        print(df_output)
+        print('method = ', method, ', average AUC: ', df_output['auc'].mean())
+        output_file_path = os.path.join(self.output_base_path, method + '_auc_record.csv')
+        df_output.to_csv(output_file_path, sep=',', index=False)
 
+    def anomaly_detection_all_method(self, method_list=None, worker=-1):
+        print('Start anomaly_detection!')
+        if method_list is None:
+            method_list = os.listdir(self.embedding_base_path)
+
+        if worker <= 0:
+            for method in method_list:
+                print('Current method is :{}'.format(method))
+                self.anomaly_detection_all_time(method)
+        else:
+            worker = min(worker, os.cpu_count())
+            pool = multiprocessing.Pool(processes=worker)
+            print("\tstart " + str(worker) + " worker(s)")
+
+            for method in method_list:
+                pool.apply_async(self.anomaly_detection_all_time, (method,))
+            pool.close()
+            pool.join()
+        print('Finish anomaly_detection!')
+
+def process_result(dataset, rep_num, method_list):
+    for method in method_list:
+        base_path = os.path.join('../../data/' + dataset, 'anomaly_detection_res_0')
+        res_path = os.path.join(base_path, method + '_auc_record.csv')
+        df_method = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg0', 'had0', 'l1_0', 'l2_0'])
+        df_avg = df_method.loc[:, ['date', 'avg0']].copy()
+        df_had = df_method.loc[:, ['date', 'had0']].copy()
+        df_l1 = df_method.loc[:, ['date', 'l1_0']].copy()
+        df_l2 = df_method.loc[:, ['date', 'l2_0']].copy()
+        for i in range(1, rep_num):
+            base_path = os.path.join('../../data/' + dataset, 'anomaly_detection_res_' + str(i))
+            res_path = os.path.join(base_path, method + '_auc_record.csv')
+            df_rep = pd.read_csv(res_path, sep=',', header=0, names=['date', 'avg' + str(i), 'had' + str(i), 'l1_' + str(i), 'l2_' + str(i)])
+            df_avg = pd.concat([df_avg, df_rep.loc[:, ['avg' + str(i)]]], axis=1)
+            df_had = pd.concat([df_had, df_rep.loc[:, ['had' + str(i)]]], axis=1)
+            df_l1 = pd.concat([df_l1, df_rep.loc[:, ['l1_' + str(i)]]], axis=1)
+            df_l2 = pd.concat([df_l2, df_rep.loc[:, ['l2_' + str(i)]]], axis=1)
+        output_base_path = os.path.join('../../data/' + dataset, 'anomaly_detection_res')
+        check_and_make_path(output_base_path)
+
+        avg_list = ['avg' + str(i) for i in range(rep_num)]
+        df_avg['avg'] = df_avg.loc[:, avg_list].mean(axis=1)
+        df_avg['max'] = df_avg.loc[:, avg_list].max(axis=1)
+        df_avg['min'] = df_avg.loc[:, avg_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_avg_record.csv')
+        df_avg.to_csv(output_path, sep=',', index=False)
+
+        had_list = ['had' + str(i) for i in range(rep_num)]
+        df_had['avg'] = df_had.loc[:, had_list].mean(axis=1)
+        df_had['max'] = df_had.loc[:, had_list].max(axis=1)
+        df_had['min'] = df_had.loc[:, had_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_had_record.csv')
+        df_had.to_csv(output_path, sep=',', index=False)
+
+        l1_list = ['l1_' + str(i) for i in range(rep_num)]
+        df_l1['avg'] = df_l1.loc[:, l1_list].mean(axis=1)
+        df_l1['max'] = df_l1.loc[:, l1_list].max(axis=1)
+        df_l1['min'] = df_l1.loc[:, l1_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_l1_record.csv')
+        df_l1.to_csv(output_path, sep=',', index=False)
+
+        l2_list = ['l2_' + str(i) for i in range(rep_num)]
+        df_l2['avg'] = df_l2.loc[:, l2_list].mean(axis=1)
+        df_l2['max'] = df_l2.loc[:, l2_list].max(axis=1)
+        df_l2['min'] = df_l2.loc[:, l2_list].min(axis=1)
+        output_path = os.path.join(output_base_path, method + '_l2_record.csv')
+        df_l2.to_csv(output_path, sep=',', index=False)
 
 if __name__ == '__main__':
-    data_path = "data\\facebook\\1.format"
-    sample_path = "data\\facebook\\sample"
-    embedding_path = "data\\facebook\\2.embedding"
-    auc_path = "data\\facebook\\auc"
+    dataset = 'email-eu'
+    rep_num = 1
 
-    # 1. 先生成异常检测的采样样本，得到带label的异常检测数据集
-    data_generator = DataGenerator()
-    #dynamic_anomaly_generation(data_path, sample_path, init_percent=0.8, anomaly_rate=0.2)
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCNH', 'RWTGCN_C', 'RWTGCN_S',  'CGCN_C', 'CGCN_S']
 
-    anomaly_detector = AnomalyDetector()
-    # 2. 对每个embedding方法，训练并测试其每个时间片的anomaly detection模型
-    #dynamic_anomaly_detection(embedding_path, sample_path, auc_path, k=2)
+    for i in range(0, rep_num):
+        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+                                       output_folder="anomaly_detection_data_" + str(i), node_file="nodes_set/nodes.csv")
+        data_generator.generate_node_samples()
+        anomaly_detector = AnomalyDetector(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+                                       ad_edge_folder="anomaly_detection_data_" + str(i), output_folder="anomaly_detection_res_" + str(i), node_file="nodes_set/nodes.csv")
+        t1 = time.time()
+        anomaly_detector.anomaly_detection_all_method(method_list=method_list, worker=12)
+        t2 = time.time()
+        print('anomaly detection cost time: ', t2 - t1, ' seconds!')
+
+    # process_result(dataset, rep_num, method_list)

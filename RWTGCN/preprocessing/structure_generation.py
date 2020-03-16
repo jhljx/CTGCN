@@ -26,7 +26,7 @@ class StructureInfoGenerator:
 
         check_and_make_path(self.core_base_path)
 
-    def get_kcore_graph(self, input_file, output_dir):
+    def get_kcore_graph(self, input_file, output_dir, core_list=None, degree_list=None):
         graph = get_nx_graph(input_file, self.full_node_list, sep='\t')
         core_num_dict = nx.core_number(graph)
         max_core_num = max(list(core_num_dict.values()))
@@ -36,7 +36,6 @@ class StructureInfoGenerator:
         # # print('max degree: ', max_degree)
         # core_list.append(max_core_num)
         # degree_list.append(max_degree)
-        # return
         check_and_make_path(output_dir)
 
         format_str = get_format_str(max_core_num)
@@ -54,10 +53,13 @@ class StructureInfoGenerator:
         f_list = os.listdir(self.origin_base_path)
         length = len(f_list)
         if worker <= 0:
+            core_list, degree_list = [], []
             for i, f_name in enumerate(f_list):
                 self.get_kcore_graph(
                     input_file=os.path.join(self.origin_base_path, f_name),
-                    output_dir=os.path.join(self.core_base_path, f_name.split('.')[0]))
+                    output_dir=os.path.join(self.core_base_path, f_name.split('.')[0]), core_list=core_list, degree_list=degree_list)
+            # print('max max core: ', max(core_list))
+            # print('max max degree: ', max(degree_list))
         else:
             worker = min(worker, length, os.cpu_count())
             pool = multiprocessing.Pool(processes=worker)

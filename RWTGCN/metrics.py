@@ -66,8 +66,7 @@ class UnsupervisedLoss(nn.Module):
                 # this block is quite important, otherwise the code will cause memory leak!
                 #######################
                 pos_score = torch.sum(embedding_mat[node_idxs].mul(embedding_mat[pos_idxs]), dim=1)
-                neg_score = -1.0 * torch.sum(
-                    embedding_mat[node_idxs].matmul(torch.transpose(embedding_mat[neg_idxs], 1, 0)), dim=1)
+                neg_score = -1.0 * torch.sum(embedding_mat[node_idxs].matmul(torch.transpose(embedding_mat[neg_idxs], 1, 0)), dim=1)
                 pos_loss = bce_loss(pos_score, torch.ones_like(pos_score))
                 neg_loss = self.Q * bce_loss(neg_score, torch.ones_like(neg_score))
                 loss_val = pos_loss + neg_loss

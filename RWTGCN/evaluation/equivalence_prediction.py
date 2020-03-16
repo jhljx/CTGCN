@@ -196,7 +196,7 @@ if __name__ == '__main__':
                                    equ_folder="equ_prediction_data", output_folder="equ_prediction_res", node_file="nodes_set/nodes.csv")
 
     # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH']
-    method_list = ['CGCN_S']
+    method_list = ['RWTGCN_C', 'RWTGCN_S']
 
     t1 = time.time()
     equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=10)
