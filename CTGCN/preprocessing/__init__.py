@@ -94,8 +94,8 @@ def ctgcn_process(dataset, worker=-1, calc_structure=True):
 if __name__ == '__main__':
     dataset = 'facebook'
     worker = 30
-    #gcn_process(dataset=dataset, worker=worker)
-    #gat_process(dataset=dataset, worker=worker)
-    #evolvegcn_process(dataset=dataset, worker=worker)
-    # cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
+    gcn_process(dataset=dataset, worker=worker)
+    gat_process(dataset=dataset, worker=worker)
+    evolvegcn_process(dataset=dataset, worker=worker)
+    cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
     ctgcn_process(dataset=dataset, worker=worker, calc_structure=True)

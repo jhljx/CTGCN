@@ -100,6 +100,7 @@ def gat_embedding(dataset, learning_type='unsupervise'):
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
         # time_list = []
         for idx in range(max_time_num):
+            print('idx = ', idx)
             adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, data_type='matrix')
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=duration)
             node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=duration)
@@ -167,6 +168,7 @@ def evolvegcn_embedding(dataset, learning_type='unsupervise'):
             evolvegcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                         node_list=nodes_set['node'].tolist(), model=evolvegcn_model, loss=evolvegcn_loss, max_time_num=max_time_num)
             evolvegcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='evolvegcnh', export=True)
+            break
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -294,7 +296,7 @@ def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
                                               node_list=nodes_set['node'].tolist(), model=cgcn_model,
                                               loss=cgcn_loss, max_time_num=max_time_num)
             # ta = time.time()
-            cgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+            cgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                    weight_decay=5e-4, model_file='cgcn_s', embedding_type='structure', export=True)
         #     tb = time.time()
         #     time_list.append(tb - ta)
@@ -424,7 +426,7 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
             ctgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                               node_list=nodes_set['node'].tolist(), model=ctgcn_model,
                                               loss=ctgcn_loss, max_time_num=max_time_num)
-            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                    weight_decay=5e-4, model_file='ctgcn_s', embedding_type='structure', export=True)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
@@ -451,10 +453,10 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
 
 if __name__ == '__main__':
     dataset = 'facebook'
-    #gcn_embedding(dataset=dataset)
-    #gat_embedding(dataset=dataset)
-    #evolvegcn_embedding(dataset=dataset)
-    # cgcn_connective_embedding(dataset=dataset)
-    # ctgcn_connective_embedding(dataset=dataset)
-    # cgcn_structural_embedding(dataset=dataset)
+    gcn_embedding(dataset=dataset)
+    gat_embedding(dataset=dataset)
+    evolvegcn_embedding(dataset=dataset)
+    cgcn_connective_embedding(dataset=dataset)
+    ctgcn_connective_embedding(dataset=dataset)
+    cgcn_structural_embedding(dataset=dataset)
     ctgcn_structural_embedding(dataset=dataset)

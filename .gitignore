@@ -132,6 +132,3 @@ dmypy.json
 *.c
 *.pyd
 */build/*
-
-data/*/2.embedding
-data/*/CTGCN
