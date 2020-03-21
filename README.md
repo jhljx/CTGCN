@@ -1,5 +1,5 @@
-# RWT-GCN
-Random Walk based Temporal Graph Convolutional Network for Dynamic Graphs
+# CTGCN
+K-Core based Temporal Graph Convolutional Network for Dynamic Graphs
 
 # Notes
 1. Origin graph file names must be timestamp format or integer number format(other wise when training dynamic embedding, sorted(f_list) may reture a wrong order of files)
