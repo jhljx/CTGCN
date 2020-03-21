@@ -39,6 +39,7 @@ def gcn_embedding(dataset, learning_type='unsupervise'):
         node_freq_folder = 'gcn_node_freq'
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
+        # time_list = []
         for idx in range(max_time_num):
             adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration)
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=duration)
@@ -49,7 +50,12 @@ def gcn_embedding(dataset, learning_type='unsupervise'):
             gcn_loss = UnsupervisedLoss(neg_num=20, Q=20, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
             gcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, node_list=nodes_set['node'].tolist(),
                                         model=gcn_model, loss=gcn_loss, max_time_num=max_time_num)
+            # ta = time.time()
             gcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gcn', export=True)
+        #     tb = time.time()
+        #     time_list.append(tb - ta)
+        # df_output = pd.DataFrame({'time': time_list})
+        # df_output.to_csv(dataset + '_gcn_time.csv', sep=',', index=False)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -92,6 +98,7 @@ def gat_embedding(dataset, learning_type='unsupervise'):
         node_freq_folder = 'gat_node_freq'
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
+        # time_list = []
         for idx in range(max_time_num):
             adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, data_type='matrix')
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=duration)
@@ -102,7 +109,12 @@ def gat_embedding(dataset, learning_type='unsupervise'):
             gat_loss = UnsupervisedLoss(neg_num=20, Q=20, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
             gat = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, node_list=nodes_set['node'].tolist(),
                                         model=gat_model, loss=gat_loss, max_time_num=max_time_num)
+            # ta = time.time()
             gat.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx, weight_decay=5e-4, model_file='gat', export=True)
+        #     tb = time.time()
+        #     time_list.append(tb - ta)
+        # df_output = pd.DataFrame({'time': time_list})
+        # df_output.to_csv(dataset + '_gat_time.csv', sep=',', index=False)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -200,6 +212,7 @@ def cgcn_connective_embedding(dataset, learning_type='unsupervise'):
         node_freq_folder = 'cgcn_node_freq'
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
+        # time_list = []
         for idx in range(0, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
@@ -209,14 +222,18 @@ def cgcn_connective_embedding(dataset, learning_type='unsupervise'):
             node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=time_num)
             neg_freq_list = data_loader.get_neg_freq_list(node_freq_base_path, start_idx=idx, duration=time_num)
 
-            cgcn_model = CGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, bias=True, rnn_type='GRU')
-            # cgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, layer_num=1, duration=time_num, bias=True, rnn_type='GRU')
-            cgcn_loss = UnsupervisedLoss(neg_num=150, Q=10, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
+            cgcn_model = CGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, bias=True, rnn_type='GRU', version='C', trans_version='L')
+            cgcn_loss = UnsupervisedLoss(neg_num=150, Q=10, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list) #150, 10
             cgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                            node_list=nodes_set['node'].tolist(), model=cgcn_model,
                                            loss=cgcn_loss, max_time_num=max_time_num)
+            # ta = time.time()
             cgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                    weight_decay=5e-4, model_file='cgcn_c', embedding_type='connection', export=True)
+        #     tb = time.time()
+        #     time_list.append(tb - ta)
+        # df_output = pd.DataFrame({'time': time_list})
+        # df_output.to_csv(dataset + '_cgcn_c_time.csv', sep=',', index=False)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -229,8 +246,7 @@ def cgcn_connective_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=time_num)
 
-            #cgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, layer_num=1, duration=time_num, bias=True, rnn_type='GRU')
-            cgcn_model = CGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, bias=True, rnn_type='GRU')
+            cgcn_model = CGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, bias=True, rnn_type='GRU', version='C', trans_version='L')
             cgcn_loss = SupervisedLoss(label_list)
             cgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder,
                                          embedding_folder=embedding_folder,
@@ -248,7 +264,7 @@ def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
     origin_folder = os.path.join('..', '1.format')
     origin_base_path =  os.path.abspath(os.path.join(base_path, origin_folder))
     embedding_folder = os.path.join('..', '2.embedding/CGCN_S')
-    core_folder = 'rwtgcn_cores'
+    core_folder = 'cgcn_cores'
     core_base_path = os.path.abspath(os.path.join(base_path, core_folder))
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -265,18 +281,25 @@ def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
     t1 = time.time()
     print('start CGCN_S embedding on ' + dataset)
     if learning_type == 'unsupervise':
+        # time_list = []
         for idx in range(0, max_time_num, duration):
+            print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            cgcn_model = CGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, bias=True, rnn_type='GRU')
+            cgcn_model = CGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, bias=True, rnn_type='GRU', version='S', trans_version='N')
             cgcn_loss = UnsupervisedLoss()
             cgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                               node_list=nodes_set['node'].tolist(), model=cgcn_model,
                                               loss=cgcn_loss, max_time_num=max_time_num)
-            cgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=10, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+            # ta = time.time()
+            cgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                    weight_decay=5e-4, model_file='cgcn_s', embedding_type='structure', export=True)
+        #     tb = time.time()
+        #     time_list.append(tb - ta)
+        # df_output = pd.DataFrame({'time': time_list})
+        # df_output.to_csv(dataset +'_cgcn_s_time.csv', sep=',', index=False)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -289,12 +312,12 @@ def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            cgcn_model = CGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3,  diffusion_num=1, bias=True, rnn_type='GRU')
+            cgcn_model = CGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3,  diffusion_num=1, bias=True, rnn_type='GRU', version='S', trans_version='N')
             cgcn_loss = SupervisedLoss(label_list)
             cgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                             node_list=nodes_set['node'].tolist(), model=cgcn_model,
                                             loss=cgcn_loss, max_time_num=max_time_num)
-            cgcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+            cgcn.learn_embedding(adj_list, x_list, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                       weight_decay=5e-4, model_file='cgcn_s', embedding_type='structure', export=True)
 
     t2 = time.time()
@@ -328,10 +351,8 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
 
-        #for dim in range(100, 600, 100):
-        #    for Q in [80, 100]:
         embedding_folder = os.path.join('..', '2.embedding/RWTGCN_C')
-        for idx in range(0, max_time_num, duration):
+        for idx in range(max_time_num - duration, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
@@ -339,7 +360,7 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
             node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=time_num)
             neg_freq_list = data_loader.get_neg_freq_list(node_freq_base_path, start_idx=idx, duration=time_num)
 
-            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=time_num, bias=True, rnn_type='GRU')
+            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=time_num, bias=True, rnn_type='GRU', version='C', trans_version='L')
             rwtgcn_loss = UnsupervisedLoss(neg_num=150, Q=10, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
             rwtgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                               node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
@@ -357,7 +378,7 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=1)
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=duration, bias=True, rnn_type='GRU')
+            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=duration, bias=True, rnn_type='GRU', version='C', trans_version='L')
             rwtgcn_loss = SupervisedLoss(label_list)
             rwtgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                             node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
@@ -391,14 +412,14 @@ def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
     t1 = time.time()
     print('start RWTGCN_S embedding on ' + dataset)
     if learning_type == 'unsupervise':
-        # for dim in range(100, 600, 100):
         embedding_folder = os.path.join('..', '2.embedding/RWTGCN_S')
-        for idx in range(0, max_time_num, duration):
+        for idx in range(max_time_num - duration, max_time_num, duration):
+            print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=time_num, bias=True, rnn_type='GRU')
+            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=time_num, bias=True, rnn_type='GRU', version='S', trans_version='N')
             rwtgcn_loss = UnsupervisedLoss()
             rwtgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                               node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
@@ -416,7 +437,7 @@ def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=1)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=duration, bias=True, rnn_type='GRU')
+            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=duration, bias=True, rnn_type='GRU', version='S', trans_version='N')
             rwtgcn_loss = SupervisedLoss(label_list)
             rwtgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                             node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
@@ -430,10 +451,10 @@ def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
 
 if __name__ == '__main__':
     dataset = 'facebook'
-    # gcn_embedding(dataset=dataset)
-    # gat_embedding(dataset=dataset)
+    #gcn_embedding(dataset=dataset)
+    #gat_embedding(dataset=dataset)
     #evolvegcn_embedding(dataset=dataset)
     # cgcn_connective_embedding(dataset=dataset)
-    rwtgcn_connective_embedding(dataset=dataset)
+    # rwtgcn_connective_embedding(dataset=dataset)
     # cgcn_structural_embedding(dataset=dataset)
     rwtgcn_structural_embedding(dataset=dataset)

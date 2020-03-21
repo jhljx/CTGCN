@@ -82,6 +82,7 @@ def rwtgcn_process(dataset, worker=-1, calc_structure=True):
     base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
+    node_file = os.path.join('..', 'nodes/6.csv')
 
     t1 = time.time()
     processing = Processing(base_path=base_path, origin_folder=origin_folder, core_folder='rwtgcn_cores',
@@ -92,7 +93,7 @@ def rwtgcn_process(dataset, worker=-1, calc_structure=True):
     print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
-    dataset = 'facebook'
+    dataset = 'facebook_edge'
     worker = 30
     #gcn_process(dataset=dataset, worker=worker)
     #gat_process(dataset=dataset, worker=worker)

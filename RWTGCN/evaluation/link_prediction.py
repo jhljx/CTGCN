@@ -308,22 +308,29 @@ def process_result(dataset, rep_num, method_list):
 
 
 if __name__ == '__main__':
-    dataset = 'enron'
-    rep_num = 20
+    dataset = 'facebook'
+    rep_num = 5
 
     method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN',  'dyGEM', 'timers', 'EvolveGCNH', 'RWTGCN_C', 'CGCN_C', 'CGCN_S']
-    # method_list = ['CGCN_S', 'dyGEM']
+    method_list = []
 
-    # for i in range(0, rep_num):
-    #     data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
-    #                                    output_folder="link_prediction_data_" + str(i), node_file="nodes_set/nodes.csv")
-    #     # data_generator.generate_edge_samples()
-    #     link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
-    #                                    lp_edge_folder="link_prediction_data_" + str(i), output_folder="link_prediction_res_" + str(i), node_file="nodes_set/nodes.csv",
-    #                                    train_ratio=1.0, test_ratio=1.0)
-    #     t1 = time.time()
-    #     link_predictor.link_prediction_all_method(method_list=method_list, worker=10)
-    #     t2 = time.time()
-    #     print('link prediction cost time: ', t2 - t1, ' seconds!')
+    for trans in [1, 2, 3, 4, 5]:
+        method_list.append('RWTGCN_C_trans_nonlinear_' + str(trans))
+        method_list.append('RWTGCN_S_trans_nonlinear_' + str(trans))
+    for trans in [2, 3, 4, 5]:
+        method_list.append('RWTGCN_C_trans_linear_' + str(trans))
+        method_list.append('RWTGCN_S_trans_linear_' + str(trans))
+
+    for i in range(0, rep_num):
+        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+                                       output_folder="link_prediction_data_" + str(i), node_file="nodes_set/nodes.csv")
+        # data_generator.generate_edge_samples()
+        link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+                                       lp_edge_folder="link_prediction_data_" + str(i), output_folder="link_prediction_res_" + str(i), node_file="nodes_set/nodes.csv",
+                                       train_ratio=1.0, test_ratio=1.0)
+        t1 = time.time()
+        link_predictor.link_prediction_all_method(method_list=method_list, worker=25)
+        t2 = time.time()
+        print('link prediction cost time: ', t2 - t1, ' seconds!')
 
     process_result(dataset, rep_num, method_list)

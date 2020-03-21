@@ -3,7 +3,7 @@ import pandas as pd
 import scipy.sparse as sp
 import networkx as nx
 import os, multiprocessing, random
-import sys, time
+import sys, time, shutil
 sys.path.append("..")
 from RWTGCN.utils import check_and_make_path, get_sp_adj_mat, get_nx_graph, get_format_str
 
@@ -23,7 +23,8 @@ class StructureInfoGenerator:
         nodes_set = pd.read_csv(node_path, names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
         self.node_num = len(self.full_node_list)
-
+        # if os.path.exists(self.core_base_path):
+        #     shutil.rmtree(self.core_base_path)
         check_and_make_path(self.core_base_path)
 
     def get_kcore_graph(self, input_file, output_dir, core_list=None, degree_list=None):

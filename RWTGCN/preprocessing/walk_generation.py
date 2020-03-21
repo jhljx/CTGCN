@@ -4,7 +4,7 @@ import os, multiprocessing, time
 import networkx as nx
 from numpy import random
 import scipy.sparse as sp
-import sys
+import sys, shutil
 sys.path.append("..")
 from RWTGCN.utils import check_and_make_path, get_sp_adj_mat
 
@@ -30,6 +30,10 @@ class WalkGenerator:
         self.walk_time = walk_time
         self.walk_length = walk_length
 
+        # if os.path.exists(self.walk_pair_base_path):
+        #     shutil.rmtree(self.walk_pair_base_path)
+        # if os.path.exists(self.node_freq_base_path):
+        #     shutil.rmtree(self.node_freq_base_path)
         check_and_make_path(self.walk_pair_base_path)
         check_and_make_path(self.node_freq_base_path)
 

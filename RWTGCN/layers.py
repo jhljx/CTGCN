@@ -30,17 +30,34 @@ class CoreDiffusion(nn.Module):
         self.norm = nn.LayerNorm(output_dim)
 
     def forward(self, x, adj_list):
-        if torch.cuda.is_available():
-            hx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
+        if self.rnn_type == 'GRU':
+            if torch.cuda.is_available():
+                hx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
+            else:
+                hx = Variable(torch.zeros(x.size()[0], self.output_dim))
+            adj_list = adj_list[::-1]
+            for i, adj in enumerate(adj_list):
+                res = F.relu(torch.sparse.mm(adj, x))
+                hx = self.rnn(res, hx)
+            #Layer normalization could improve performance and make rnn stable
+            hx = self.norm(hx)
+            return hx
+        elif self.rnn_type == 'LSTM':
+            if torch.cuda.is_available():
+                hx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
+                cx = Variable(torch.zeros(x.size()[0], self.output_dim).cuda())
+            else:
+                hx = Variable(torch.zeros(x.size()[0], self.output_dim))
+                cx = Variable(torch.zeros(x.size()[0], self.output_dim))
+            adj_list = adj_list[::-1]
+            for i, adj in enumerate(adj_list):
+                res = F.relu(torch.sparse.mm(adj, x))
+                hx, cx = self.rnn(res, hx, cx)
+            #Layer normalization could improve performance and make rnn stable
+            hx = self.norm(hx)
+            return hx
         else:
-            hx = Variable(torch.zeros(x.size()[0], self.output_dim))
-        adj_list = adj_list[::-1]
-        for i, adj in enumerate(adj_list):
-            res = F.relu(torch.sparse.mm(adj, x))
-            hx = self.rnn(res, hx)
-        #Layer normalization could improve performance and make rnn stable
-        hx = self.norm(hx)
-        return hx
+            raise AttributeError('Unsupported rnn type!')
 
 class GRUCell(nn.Module):
     input_dim: int
@@ -54,7 +71,7 @@ class GRUCell(nn.Module):
         self.bias = bias
 
         self.x2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
-        self.h2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
+        self.h2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -91,7 +108,7 @@ class LSTMCell(nn.Module):
         self.output_dim = output_dim
         self.bias = bias
 
-        self.x2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
+        self.x2h = nn.Linear(input_dim, 4 * output_dim, bias=bias)
         self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
         self.reset_parameters()
 
@@ -100,8 +117,7 @@ class LSTMCell(nn.Module):
         for w in self.parameters():
             w.data.uniform_(-std, std)
 
-    def forward(self, x, hidden):
-        hx, cx = hidden
+    def forward(self, x, hx, cx):
         gates = self.x2h(x) + self.h2h(hx)
         gates = gates.squeeze()
         ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
@@ -154,7 +170,7 @@ class Linear(nn.Module):
 
 ###MLP with linear output
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True, trans_version='L'):
         '''
             num_layers: number of layers in the neural networks (EXCLUDING the input layer). If num_layers=1, this reduces to linear model.
             input_dim: dimensionality of input features
@@ -167,6 +183,7 @@ class MLP(nn.Module):
 
         self.linear_or_not = True  # default is linear model
         self.num_layers = num_layers
+        self.trans_version = trans_version
 
         if num_layers < 1:
             raise ValueError("number of layers should be positive!")
@@ -190,10 +207,21 @@ class MLP(nn.Module):
     def forward(self, x):
         if self.linear_or_not:
             # If linear model
-            return self.linear(x)
+            x = self.linear(x)
+            if self.trans_version == 'L':
+                return x
+            elif self.trans_version == 'N':
+                return F.relu(x)
+            else:
+                raise ValueError("Unsupported trans version!")
         else:
             # If MLP
             h = x
             for layer in range(self.num_layers - 1):
-                h = F.relu(self.batch_norms[layer](self.linears[layer](h)))
+                if self.trans_version == 'L':
+                    h = self.batch_norms[layer](self.linears[layer](h))
+                elif self.trans_version == 'N':
+                    h = F.relu(self.batch_norms[layer](self.linears[layer](h)))
+                else:
+                    raise ValueError("Unsupported trans version!")
             return self.linears[self.num_layers - 1](h)

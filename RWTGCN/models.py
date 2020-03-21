@@ -49,8 +49,10 @@ class CGCN(nn.Module):
     diffusion_num: int
     bias: bool
     rnn_type: str
+    version: str
+    trans_version: str
 
-    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, bias=True, rnn_type='GRU'):
+    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, bias=True, rnn_type='GRU', version='C', trans_version='L'):
         super(CGCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -59,32 +61,27 @@ class CGCN(nn.Module):
         self.diffusion_num = diffusion_num
         self.bias = bias
         self.rnn_type = rnn_type
+        self.version = version
+        self.trans_version = trans_version
 
-        self.mlp = MLP(input_dim, hidden_dim, output_dim, num_layers=trans_num, bias=bias)
-
-        if diffusion_num == 1:
-            self.diffusion_list = nn.ModuleList()
-            self.diffusion_list.append(CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type))
-        elif diffusion_num > 1:
-            self.diffusion_list = nn.ModuleList()
-            for i in range(diffusion_num):
-                self.diffusion_list.append(CoreDiffusion(output_dim, output_dim, bias=bias, rnn_type=rnn_type))
+        if self.version == 'C':
+            self.mlp = MLP(input_dim, hidden_dim, hidden_dim, trans_num, bias=bias, trans_version=trans_version)
+            self.duffision = CDN(hidden_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type)
+        elif self.version == 'S':
+            self.mlp = MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias)
+            self.duffision = CDN(output_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type)
         else:
-            raise ValueError("number of layers should be positive!")
+            raise AttributeError('Unsupported CTGCN version!')
 
     def forward(self, x, adj_list):
         if isinstance(x, list):
             assert len(x) == 1
             x, adj_list = x[0], adj_list[0]
             trans = self.mlp(x)
-            x = trans
-            for i in range(self.diffusion_num):
-                x = self.diffusion_list[i](x, adj_list)
+            x = self.duffision(trans, adj_list)
             return x, trans
         trans = self.mlp(x)
-        x = trans
-        for i in range(self.diffusion_num):
-            x = self.diffusion_list[i](x, adj_list)
+        x = self.duffision(trans, adj_list)
         return x, trans
 
 
@@ -93,17 +90,21 @@ class RWTGCN(nn.Module):
     hidden_dim: int
     output_dim: int
     rnn_type: str
+    version: str
+    trans_version: str
     duration: int
     trans_num: int
     diffusion_num: int
     bias: bool
 
-    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, duration, bias=True, rnn_type='GRU'):
+    def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, duration, bias=True, rnn_type='GRU', version='C', trans_version='L'):
         super(RWTGCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
         self.rnn_type = rnn_type
+        self.version = version
+        self.trans_version = trans_version
         self.duration = duration
         self.trans_num = trans_num
         self.diffusion_num = diffusion_num
@@ -113,8 +114,14 @@ class RWTGCN(nn.Module):
         self.duffision_list = nn.ModuleList()
 
         for i in range(self.duration):
-            self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias))
-            self.duffision_list.append(CDN(output_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type))
+            if self.version == 'C':
+                self.mlp_list.append(MLP(input_dim, hidden_dim, hidden_dim, trans_num, bias=bias, trans_version=trans_version))
+                self.duffision_list.append(CDN(hidden_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type))
+            elif self.version == 'S':
+                self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias, trans_version=trans_version))
+                self.duffision_list.append(CDN(output_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type))
+            else:
+                raise AttributeError('Unsupported CTGCN version!')
         if self.rnn_type == 'LSTM':
             self.rnn = LSTMCell(output_dim, output_dim, bias=bias)
             # self.lstm = nn.LSTM(input_size=output_dim, hidden_size=output_dim, num_layers=1, bidirectional=False)
