@@ -48,7 +48,14 @@ K-Core based Temporal Graph Convolutional Network for Dynamic Graphs
 3. train graph embedding methods
 
        python3 train.py
-    
+
+**Baselines:**
+1. GCN, GAT, EvolveGCN, timers  
+[https://github.com/jhljx/CTGCN/tree/master/CTGCN/baseline](https://github.com/jhljx/CTGCN/tree/master/CTGCN/baseline)
+2. DeepWalk, node2vec, struc2vec   
+[https://github.com/shenweichen/GraphEmbedding](https://github.com/shenweichen/GraphEmbedding)
+3. DynGEM   
+[https://github.com/palash1992/DynamicGEM/blob/master/dynamicgem/embedding/dynSDNE.py](https://github.com/palash1992/DynamicGEM/blob/master/dynamicgem/embedding/dynSDNE.py) 
 
 # Notes
 1. Origin graph file names must be timestamp format or integer number format(other wise when training dynamic embedding, sorted(f_list) may reture a wrong order of files)
