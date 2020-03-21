@@ -170,7 +170,7 @@ class Linear(nn.Module):
 
 ###MLP with linear output
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True, trans_version='L'):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True, trans_version='N'):
         '''
             num_layers: number of layers in the neural networks (EXCLUDING the input layer). If num_layers=1, this reduces to linear model.
             input_dim: dimensionality of input features

@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import random
+import sys, random
+sys.path.append("..")
+from CTGCN.utils import accuracy
 
 class UnsupervisedLoss(nn.Module):
     node_pair_list: list
@@ -17,12 +19,6 @@ class UnsupervisedLoss(nn.Module):
         self.Q = Q
         self.node_pair_list = node_pair_list
         self.neg_freq_list = neg_freq_list
-
-    def negative_sampling_loss(self, embeddings, batch_node_idxs, timestamp_num):
-        return
-
-    def reconstruct_loss(self, embeddings, batch_node_idxs, timestamp_num, structure_list):
-        return
 
     def forward(self, embeddings, batch_node_idxs, loss_type='connection', structure_list=None):
         if isinstance(embeddings, list):
@@ -85,20 +81,80 @@ class UnsupervisedLoss(nn.Module):
                 else:
                     embedding_mat = embeddings
                     structure_mat = structure_list
-                structure_loss = structure_loss + mse_loss(structure_mat[batch_node_idxs], embedding_mat[batch_node_idxs])
+                node_idxs = torch.LongTensor(batch_node_idxs)
+                if torch.cuda.is_available():
+                    node_idxs = node_idxs.cuda()
+                structure_loss = structure_loss + mse_loss(structure_mat[node_idxs], embedding_mat[node_idxs])
             return structure_loss
             #return self.reconstruct_loss(embeddings, batch_node_idxs, timestamp_num, structure_list)
         else:
             raise AttributeError('Unsupported loss type!')
 
-
-
 class SupervisedLoss(nn.Module):
-    label_list: list
 
-    def __init__(self, label_list):
+    def __init__(self):
         super(SupervisedLoss, self).__init__()
-        self.label_list = label_list
 
-    def forward(self, embedding_list, batch_node_idxs):
-        return
+    def forward(self, embeddings, batch_node_idxs, batch_labels, loss_type='connection', structure_list=None, emb_list=None):
+        if isinstance(embeddings, list):
+            timestamp_num = len(embeddings)
+        else: # tensor
+            timestamp_num = embeddings.size()[0] if len(embeddings.size()) == 3 else 1
+
+        if loss_type == 'connection':
+            log_softmax = nn.LogSoftmax(dim=1)
+            nll_loss = nn.NLLLoss()
+            total_loss = Variable(torch.FloatTensor([0.]), requires_grad=True).cuda() if torch.cuda.is_available() else Variable(torch.FloatTensor([0.]), requires_grad=True)
+            total_acc = Variable(torch.FloatTensor([0.]), requires_grad=True).cuda() if torch.cuda.is_available() else Variable(torch.FloatTensor([0.]), requires_grad=True)
+            for i in range(timestamp_num):
+                if isinstance(embeddings, list) or len(embeddings.size()) == 3:
+                    output_mat = embeddings[i]
+                else:
+                    output_mat = embeddings
+                ######################
+                # this block is quite important, otherwise the code will cause memory leak!
+                node_idxs = torch.LongTensor(batch_node_idxs)
+                labels = torch.LongTensor(batch_labels)
+                if torch.cuda.is_available():
+                    node_idxs = node_idxs.cuda()
+                    labels = labels.cuda()
+                preds = log_softmax(output_mat[node_idxs])
+                # this block is quite important, otherwise the code will cause memory leak!
+                #######################
+                loss_val = nll_loss(preds, labels)
+                acc_val = accuracy(preds, labels)
+                total_loss = total_loss + loss_val
+                total_acc = total_acc + acc_val
+            return total_loss, total_acc
+        elif loss_type == 'structure':
+            mse_loss = nn.MSELoss()
+            log_softmax = nn.LogSoftmax(dim=1)
+            nll_loss = nn.NLLLoss()
+            total_loss = Variable(torch.FloatTensor([0.]), requires_grad=True).cuda() if torch.cuda.is_available() else Variable(torch.FloatTensor([0.]), requires_grad=True)
+            total_acc = Variable(torch.FloatTensor([0.]), requires_grad=True).cuda() if torch.cuda.is_available() else Variable(torch.FloatTensor([0.]), requires_grad=True)
+            for i in range(timestamp_num):
+                if isinstance(embeddings, list) or len(embeddings.size()) == 3:
+                    output_mat = embeddings[i]
+                    embedding_mat = emb_list[i]
+                    structure_mat = structure_list[i]
+                else:
+                    output_mat = embeddings
+                    embedding_mat = emb_list
+                    structure_mat = structure_list
+                ######################
+                # this block is quite important, otherwise the code will cause memory leak!
+                node_idxs = torch.LongTensor(batch_node_idxs)
+                labels = torch.LongTensor(batch_labels)
+                if torch.cuda.is_available():
+                    node_idxs = node_idxs.cuda()
+                    labels = labels.cuda()
+                preds = log_softmax(output_mat[node_idxs])
+                # this block is quite important, otherwise the code will cause memory leak!
+                #######################
+                loss_val = nll_loss(preds, labels) + mse_loss(structure_mat[node_idxs], embedding_mat[node_idxs])
+                acc_val = accuracy(preds, labels)
+                total_loss = total_loss + loss_val
+                total_acc = total_acc + acc_val
+            return total_loss, total_acc
+        else:
+            raise AttributeError('Unsupported loss type!')

@@ -418,7 +418,3 @@ def timers(nodes_file, input_path, output_path, Theta=0.17, dim=128, Update=True
     del S_cum, S_perturb, Sim
     del loss_rerun
     del U_cur, V_cur
-
-if __name__ == '__main__':
-    timers(nodes_file="test_data\\nodes.csv", input_path="test_data\\data", output_path="test_data\\output",
-           Theta=0.17, dim=2, Update=True)

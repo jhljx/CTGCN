@@ -172,12 +172,128 @@ class BaseEmbedding:
         torch.set_num_threads(thread_num)
 
 class SupervisedEmbedding(BaseEmbedding):
-    def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder="model"):
+    def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, classifier, max_time_num, model_folder="model"):
         super(SupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
+        self.classifier = classifier
 
-    def learn_embedding(self, adj_list, x_list, epoch=50, batch_size=10240, alpha=1, lr=1e-3,
-                        start_idx=0, weight_decay=0., model_file='ctgcn', embedding_type='connection', load_model=False, export=True):
+    def learn_embedding(self, adj_list, x_list, label_list, single_output=True, epoch=50, batch_size=10240, lr=1e-3,
+                        start_idx=0, weight_decay=0., model_file='ctgcn', classifier_file='ctgcn_cls', embedding_type='connection', load_model=False, export=True):
+        print('start learning embedding!')
+        st = time.time()
+        model = self.model
+        classifier = self.classifier
+        if load_model:
+            model.load_state_dict(torch.load(os.path.join(self.model_base_path, model_file)))
+            model.eval()
+            classifier.load_state_dict(torch.load(os.path.join(self.model_base_path, classifier_file)))
+            classifier.eval()
 
+        if torch.cuda.is_available():
+            model = model.to(self.device)
+            classifier = classifier.to(self.device)
+            torch.cuda.empty_cache()
+        # optimizer = optim.SGD(model.parameters(), lr=lr, momentum=0.8, weight_decay=weight_decay)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+        optimizer.zero_grad()
+
+        embedding_list, structure_list = [], []
+        shuffled_node_idxs = np.random.permutation(np.arange(self.node_num))
+        train_num = int(np.floor(self.node_num * 0.5))
+        val_num = int(np.floor(self.node_num * 0.3))
+        idx_train = shuffled_node_idxs[: train_num]
+        label_train = label_list[idx_train]
+        idx_val = shuffled_node_idxs[train_num: train_num + val_num]
+        label_val= label_list[idx_val]
+        idx_test = shuffled_node_idxs[train_num + val_num:]
+        label_test = label_list[idx_test]
+
+        batch_num = train_num // batch_size
+        if train_num % batch_size != 0:
+            batch_num += 1
+        best_acc = 0
+        # print('start training!')
+        for i in range(epoch):
+            node_idx_list = np.random.permutation(np.arange(train_num))
+            for j in range(batch_num):
+                train_node_idxs = node_idx_list[j * batch_size: min(train_num, (j + 1) * batch_size)]
+                batch_node_idxs = idx_train[train_node_idxs]
+                batch_labels = label_train[train_node_idxs]
+                t1 = time.time()
+                if single_output:
+                    embedding_list = model(x_list, adj_list)
+                    cls_list = classifier(embedding_list)
+                    loss_train, acc_train = self.loss(cls_list, batch_node_idxs, batch_labels, loss_type=embedding_type)
+                else:
+                    embedding_list, structure_list = model(x_list, adj_list)
+                    cls_list = classifier(embedding_list)
+                    loss_train, acc_train = self.loss(cls_list, batch_node_idxs, batch_labels, loss_type=embedding_type, structure_list=structure_list, emb_list=embedding_list)
+                loss_train.backward()
+                # gradient accumulation
+                if j == batch_num - 1:
+                    optimizer.step()  # update gradient
+                    model.zero_grad()
+                    loss_val, acc_val = self.loss(cls_list, idx_val, label_val, loss_type=embedding_type, structure_list=structure_list, emb_list=embedding_list)
+                    print('Epoch: ' + str(i + 1), 'loss_train: {:.4f}'.format(loss_train.item()), 'acc_train: {:.4f}'.format(acc_train.item()),
+                          'loss_val: {:.4f}'.format(loss_val.item()), 'acc_val: {:.4f}'.format(acc_val.item()), 'cost time: {:.4f}s'.format(time.time() - t1))
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    if acc_val > best_acc:
+                        best_acc = acc_val
+                        torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
+                        torch.save(classifier.state_dict(), os.path.join(self.model_base_path, classifier_file))
+                # t2 = time.time()
+                # print("epoch", i + 1, ', batch num = ', j + 1, ", loss train:", loss_train.item(), ', cost time: ', t2 - t1, ' seconds!')
+        model.load_state_dict(torch.load(os.path.join(self.model_base_path, model_file)))
+        model.eval()
+        classifier.load_state_dict(torch.load(os.path.join(self.model_base_path, classifier_file)))
+        classifier.eval()
+
+        if single_output:
+            embedding_list = model(x_list, adj_list)
+            cls_list = classifier(embedding_list)
+            loss_test, acc_test = self.loss(cls_list, idx_test, label_test, loss_type=embedding_type)
+        else:
+            embedding_list, structure_list = model(x_list, adj_list)
+            cls_list = classifier(embedding_list)
+            loss_test, acc_test = self.loss(cls_list, idx_test, label_test, loss_type=embedding_type, structure_list=structure_list, emb_list=embedding_list)
+        print("Test set results:", "loss= {:.4f}".format(loss_test.item()), "accuracy= {:.4f}".format(acc_test.item()))
+
+        if export:
+            if embedding_type == 'connection':
+                #print('connection')
+                output_list = embedding_list
+            elif embedding_type == 'structure':
+                output_list = structure_list
+            else:
+                raise AttributeError('Unsupported embedding type!')
+            if isinstance(output_list, list):
+                for i in range(len(output_list)):
+                    embedding = output_list[i]
+                    timestamp = self.timestamp_list[start_idx + i].split('.')[0]
+                    df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+                    embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                    df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+            else: # tensor
+                if len(output_list.size()) == 3:
+                    for i in range(len(output_list)):
+                        embedding = torch.squeeze(output_list[i, :, :], dim=0)
+                        timestamp = self.timestamp_list[start_idx + i].split('.')[0]
+                        df_export = pd.DataFrame(data=embedding.cpu().detach().numpy(), index=self.full_node_list)
+                        embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                        df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+                else:
+                    timestamp = self.timestamp_list[start_idx].split('.')[0]
+                    df_export = pd.DataFrame(data=output_list.cpu().detach().numpy(), index=self.full_node_list)
+                    embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
+                    df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
+
+        del adj_list, x_list, embedding_list, model
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        else:
+            gc.collect()
+        en = time.time()
+        print('training total time: ', en - st, ' seconds!')
         return
 
 
@@ -217,14 +333,13 @@ class UnsupervisedEmbedding(BaseEmbedding):
                 else:
                     embedding_list, structure_list= model(x_list, adj_list)
                     loss = self.loss(embedding_list, batch_node_idxs, loss_type=embedding_type, structure_list=structure_list)
-
                 loss.backward()
                 # gradient accumulation
                 if j == batch_num - 1:
                     optimizer.step()  # update gradient
                     model.zero_grad()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                 t2 = time.time()
                 print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t2 - t1, ' seconds!')
 
@@ -256,7 +371,7 @@ class UnsupervisedEmbedding(BaseEmbedding):
                     df_export = pd.DataFrame(data=output_list.cpu().detach().numpy(), index=self.full_node_list)
                     embedding_path = os.path.join(self.embedding_base_path, timestamp + ".csv")
                     df_export.to_csv(embedding_path, sep='\t', header=True, index=True)
-        # 保存模型
+
         torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
         del adj_list, x_list, embedding_list, model
         if torch.cuda.is_available():

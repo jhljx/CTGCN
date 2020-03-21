@@ -218,22 +218,22 @@ def process_result(dataset, rep_num, method_list):
         df_method.to_csv(output_path, sep=',', index=False)
 
 if __name__ == '__main__':
-    dataset = 'europe_air'
-    rep_num = 20
+    dataset = 'america_air'
+    rep_num = 100
 
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO', 'CTGCN_S']
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCNH', 'CGCN_C', 'CGCN_S', 'CTGCN_C', 'CTGCN_S']
 
     t1 = time.time()
     for i in range(rep_num):
         data_generator = DataGenerator(base_path="../data/" + dataset, input_folder="1.format",
                                        output_folder="node_classification_data_" + str(i), node_file="nodes_set/nodes.csv", label_file="nodes_set/labels.csv",
                                        trans_label_file="nodes_set/trans_label.csv")
-        # data_generator.generate_node_samples()
+        data_generator.generate_node_samples()
 
         node_classifier = NodeClassifier(base_path="../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                          nodeclas_folder="node_classification_data_" + str(i), output_folder="node_classification_res_" + str(i), node_file="nodes_set/nodes.csv",
                                          trans_label_file="nodes_set/trans_label.csv")
-        node_classifier.node_classification_all_method(method_list=method_list, worker=11)
+        node_classifier.node_classification_all_method(method_list=method_list, worker=12)
 
     t2 = time.time()
     print('node classification cost time: ', t2 - t1, ' seconds!')

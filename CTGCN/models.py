@@ -40,6 +40,38 @@ class CDN(nn.Module):
             x = self.diffusion_list[i](x, adj_list)
         return x
 
+class MLPClassifier(nn.Module):
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    layer_num: int
+    duration: int
+    bias: bool
+    trans_version: str
+
+    def __init__(self, input_dim, hidden_dim, output_dim, layer_num, duration, bias=True, trans_version='N'):
+        super(MLPClassifier, self).__init__()
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.layer_num = layer_num
+        self.duration = duration
+        self.bias = bias
+        self.trans_version = trans_version
+
+        self.mlp_list = nn.ModuleList()
+        for i in range(self.duration):
+            self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, layer_num, bias=bias, trans_version=trans_version))
+
+    def forward(self, x_list):
+        if isinstance(x_list, list):
+            output_list = []
+            for i in range(len(x_list)):
+                x = self.mlp_list[i](x_list[i])
+                output_list.append(x)
+            return output_list
+        x = self.mlp_list[0](x_list)
+        return x
 
 class CGCN(nn.Module):
     input_dim: int
@@ -79,11 +111,10 @@ class CGCN(nn.Module):
             x, adj_list = x[0], adj_list[0]
             trans = self.mlp(x)
             x = self.duffision(trans, adj_list)
-            return x, trans
+            return [x], [trans]
         trans = self.mlp(x)
         x = self.duffision(trans, adj_list)
         return x, trans
-
 
 class CTGCN(nn.Module):
     input_dim: int

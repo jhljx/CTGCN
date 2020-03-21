@@ -92,10 +92,10 @@ def ctgcn_process(dataset, worker=-1, calc_structure=True):
     print('finish ctgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
-    dataset = 'facebook'
+    dataset = 'europe_air'
     worker = 30
-    gcn_process(dataset=dataset, worker=worker)
-    gat_process(dataset=dataset, worker=worker)
-    evolvegcn_process(dataset=dataset, worker=worker)
+    #gcn_process(dataset=dataset, worker=worker)
+    #gat_process(dataset=dataset, worker=worker)
+    # evolvegcn_process(dataset=dataset, worker=worker)
     cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
     ctgcn_process(dataset=dataset, worker=worker, calc_structure=True)
