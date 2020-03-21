@@ -4,7 +4,7 @@ import os, time, sys, multiprocessing
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path
+from CTGCN.utils import check_and_make_path
 
 class DataGenerator(object):
     base_path: str
@@ -311,21 +311,13 @@ if __name__ == '__main__':
     dataset = 'facebook'
     rep_num = 5
 
-    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN',  'dyGEM', 'timers', 'EvolveGCNH', 'RWTGCN_C', 'CGCN_C', 'CGCN_S']
-    method_list = []
-
-    for trans in [1, 2, 3, 4, 5]:
-        method_list.append('RWTGCN_C_trans_nonlinear_' + str(trans))
-        method_list.append('RWTGCN_S_trans_nonlinear_' + str(trans))
-    for trans in [2, 3, 4, 5]:
-        method_list.append('RWTGCN_C_trans_linear_' + str(trans))
-        method_list.append('RWTGCN_S_trans_linear_' + str(trans))
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN',  'dyGEM', 'timers', 'EvolveGCNH', 'CTGCN_C', 'CTGCN_S', 'CGCN_C', 'CGCN_S']
 
     for i in range(0, rep_num):
-        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+        data_generator = DataGenerator(base_path="../data/" + dataset, input_folder="1.format",
                                        output_folder="link_prediction_data_" + str(i), node_file="nodes_set/nodes.csv")
         # data_generator.generate_edge_samples()
-        link_predictor = LinkPredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+        link_predictor = LinkPredictor(base_path="../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                        lp_edge_folder="link_prediction_data_" + str(i), output_folder="link_prediction_res_" + str(i), node_file="nodes_set/nodes.csv",
                                        train_ratio=1.0, test_ratio=1.0)
         t1 = time.time()

@@ -129,7 +129,9 @@ dmypy.json
 .pyre/
 
 .idea/
-data/
 *.c
 *.pyd
 */build/*
+
+data/*/2.embedding
+data/*/CTGCN

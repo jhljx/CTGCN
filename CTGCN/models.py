@@ -4,7 +4,7 @@ import torch, math
 import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
-from RWTGCN.layers import CoreDiffusion, MLP, GRUCell, LSTMCell
+from CTGCN.layers import CoreDiffusion, MLP, GRUCell, LSTMCell
 
 class CDN(nn.Module):
     input_dim: int
@@ -85,7 +85,7 @@ class CGCN(nn.Module):
         return x, trans
 
 
-class RWTGCN(nn.Module):
+class CTGCN(nn.Module):
     input_dim: int
     hidden_dim: int
     output_dim: int
@@ -98,7 +98,7 @@ class RWTGCN(nn.Module):
     bias: bool
 
     def __init__(self, input_dim, hidden_dim, output_dim, trans_num, diffusion_num, duration, bias=True, rnn_type='GRU', version='C', trans_version='L'):
-        super(RWTGCN, self).__init__()
+        super(CTGCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim

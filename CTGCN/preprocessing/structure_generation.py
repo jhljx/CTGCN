@@ -5,7 +5,7 @@ import networkx as nx
 import os, multiprocessing, random
 import sys, time, shutil
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path, get_sp_adj_mat, get_nx_graph, get_format_str
+from CTGCN.utils import check_and_make_path, get_sp_adj_mat, get_nx_graph, get_format_str
 
 class StructureInfoGenerator:
     base_path: str
@@ -73,10 +73,3 @@ class StructureInfoGenerator:
             pool.close()
             pool.join()
         print("got it...")
-
-if __name__ == "__main__":
-    s = StructureInfoGenerator(base_path="..\\data\\email-eu", input_folder="1.format",
-                                   output_folder="RWT-GCN\\structural_network", node_file="nodes_set\\nodes.csv",
-                                   hop=1)
-    s.get_structural_info_all_time(worker=-1)
-    s.get_kcore_graph_all_time(worker=-1)

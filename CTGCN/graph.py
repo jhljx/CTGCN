@@ -3,7 +3,7 @@ import pandas as pd
 import os, sys
 sys.path.append("..")
 import networkx as nx
-from RWTGCN.utils import get_nx_graph, check_and_make_path
+from CTGCN.utils import get_nx_graph, check_and_make_path
 
 def get_graph_from_nodes(file_path, node_file, output_node_dir, output_edge_dir, sep='\t'):
     import random
@@ -127,10 +127,10 @@ def transform():
 if __name__ == '__main__':
     # transform()
     # dataset = 'facebook_node'
-    # base_dir = '/data/' + dataset
+    # base_dir = '../data/' + dataset
     # get_graph_from_nodes(file_path=os.path.join(base_dir, '0.input', '2008-12.csv'), node_file=os.path.join(base_dir, 'nodes_set/nodes.csv'),
     #                      output_node_dir=os.path.join(base_dir, 'nodes'), output_edge_dir=os.path.join(base_dir, '1.format'))
     dataset = 'facebook_edge'
-    base_dir = '/data/' + dataset
+    base_dir = '../data/' + dataset
     get_graph_from_edges(file_path=os.path.join(base_dir, '0.input', '2008-12.csv'), node_file=os.path.join(base_dir, 'nodes_set/nodes.csv'),
                          output_node_dir=os.path.join(base_dir, 'nodes'), output_edge_dir=os.path.join(base_dir, '1.format'))

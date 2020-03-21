@@ -6,7 +6,7 @@ from sklearn.metrics import roc_auc_score, accuracy_score
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn import preprocessing
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path
+from CTGCN.utils import check_and_make_path
 
 class DataGenerator(object):
     base_path: str
@@ -221,21 +221,16 @@ if __name__ == '__main__':
     dataset = 'europe_air'
     rep_num = 20
 
-    # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO']
-
-    # prob_list = [0]
-    # for prob in prob_list:
-    #     method_list.append('RWTGCN_prob_' + str(prob))
-    method_list = ['GAT']
+    method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'GAT', 'dyGEM', 'timers', 'EvolveGCNH', 'EvolveGCNO', 'CTGCN_S']
 
     t1 = time.time()
     for i in range(rep_num):
-        data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+        data_generator = DataGenerator(base_path="../data/" + dataset, input_folder="1.format",
                                        output_folder="node_classification_data_" + str(i), node_file="nodes_set/nodes.csv", label_file="nodes_set/labels.csv",
                                        trans_label_file="nodes_set/trans_label.csv")
         # data_generator.generate_node_samples()
 
-        node_classifier = NodeClassifier(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+        node_classifier = NodeClassifier(base_path="../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                          nodeclas_folder="node_classification_data_" + str(i), output_folder="node_classification_res_" + str(i), node_file="nodes_set/nodes.csv",
                                          trans_label_file="nodes_set/trans_label.csv")
         node_classifier.node_classification_all_method(method_list=method_list, worker=11)

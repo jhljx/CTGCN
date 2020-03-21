@@ -1,7 +1,7 @@
 import time, os, sys
 sys.path.append("..")
-from RWTGCN.preprocessing.structure_generation import StructureInfoGenerator
-from RWTGCN.preprocessing.walk_generation import WalkGenerator
+from CTGCN.preprocessing.structure_generation import StructureInfoGenerator
+from CTGCN.preprocessing.walk_generation import WalkGenerator
 
 class Processing:
     def __init__(self, base_path, origin_folder, core_folder, walk_pair_folder, node_freq_folder, node_file, walk_time=100, walk_length=5):
@@ -27,7 +27,7 @@ class Processing:
         print('finish generate walk info! cost time: ', t2 - t1, ' seconds.')
 
 def gcn_process(dataset, worker=-1):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -40,7 +40,7 @@ def gcn_process(dataset, worker=-1):
     print('finish gcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 def gat_process(dataset, worker=-1):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -53,7 +53,7 @@ def gat_process(dataset, worker=-1):
     print('finish gat preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 def evolvegcn_process(dataset, worker=-1):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -66,7 +66,7 @@ def evolvegcn_process(dataset, worker=-1):
     print('finish evolvegcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 def cgcn_process(dataset, worker=-1, calc_structure=True):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -78,25 +78,24 @@ def cgcn_process(dataset, worker=-1, calc_structure=True):
     t2 = time.time()
     print('finish cgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
-def rwtgcn_process(dataset, worker=-1, calc_structure=True):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+def ctgcn_process(dataset, worker=-1, calc_structure=True):
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
-    node_file = os.path.join('..', 'nodes/6.csv')
 
     t1 = time.time()
-    processing = Processing(base_path=base_path, origin_folder=origin_folder, core_folder='rwtgcn_cores',
-                            walk_pair_folder='rwtgcn_walk_pairs', node_freq_folder='rwtgcn_node_freq', node_file=node_file,
+    processing = Processing(base_path=base_path, origin_folder=origin_folder, core_folder='ctgcn_cores',
+                            walk_pair_folder='ctgcn_walk_pairs', node_freq_folder='ctgcn_node_freq', node_file=node_file,
                             walk_time=10, walk_length=5)
     processing.run(worker=worker, calc_structure=calc_structure)
     t2 = time.time()
-    print('finish rwtgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
+    print('finish ctgcn preprocessing! total cost time:', t2 - t1, ' seconds!')
 
 if __name__ == '__main__':
-    dataset = 'facebook_edge'
+    dataset = 'facebook'
     worker = 30
     #gcn_process(dataset=dataset, worker=worker)
     #gat_process(dataset=dataset, worker=worker)
     #evolvegcn_process(dataset=dataset, worker=worker)
     # cgcn_process(dataset=dataset, worker=worker, calc_structure=True)
-    rwtgcn_process(dataset=dataset, worker=worker, calc_structure=True)
+    ctgcn_process(dataset=dataset, worker=worker, calc_structure=True)

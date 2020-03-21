@@ -6,19 +6,19 @@ import gc
 sys.path.append("..")
 import torch
 import torch.nn as nn
-from RWTGCN.metrics import SupervisedLoss, UnsupervisedLoss
-from RWTGCN.baseline.egcn import EvolveGCN
-from RWTGCN.baseline.gcn import GCN
-from RWTGCN.baseline.gat import SpGAT
-from RWTGCN.embedding import  DataLoader, SupervisedEmbedding, UnsupervisedEmbedding
-from RWTGCN.models import RWTGCN, CGCN
-from RWTGCN.utils import check_and_make_path, sparse_mx_to_torch_sparse_tensor, get_sp_adj_mat, separate
-from RWTGCN.evaluation.link_prediction import LinkPredictor
+from CTGCN.metrics import SupervisedLoss, UnsupervisedLoss
+from CTGCN.baseline.egcn import EvolveGCN
+from CTGCN.baseline.gcn import GCN
+from CTGCN.baseline.gat import SpGAT
+from CTGCN.embedding import  DataLoader, SupervisedEmbedding, UnsupervisedEmbedding
+from CTGCN.models import CTGCN, CGCN
+from CTGCN.utils import check_and_make_path, sparse_mx_to_torch_sparse_tensor, get_sp_adj_mat, separate
+from CTGCN.evaluation.link_prediction import LinkPredictor
 
 os.environ["CUDA_VISIBLE_DEVICES"] = '0, 1, 2,3'
 
 def gcn_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
     embedding_folder = os.path.join('..', '2.embedding/GCN')
@@ -77,7 +77,7 @@ def gcn_embedding(dataset, learning_type='unsupervise'):
     return
 
 def gat_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
     embedding_folder = os.path.join('..', '2.embedding/GAT')
@@ -136,7 +136,7 @@ def gat_embedding(dataset, learning_type='unsupervise'):
     return
 
 def evolvegcn_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
     embedding_folder = os.path.join('..', '2.embedding/EvolveGCNH')
@@ -188,7 +188,7 @@ def evolvegcn_embedding(dataset, learning_type='unsupervise'):
     return
 
 def cgcn_connective_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     embedding_folder = os.path.join('..', '2.embedding/CGCN_C')
     core_folder = 'cgcn_cores'
@@ -260,7 +260,7 @@ def cgcn_connective_embedding(dataset, learning_type='unsupervise'):
 
 
 def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     origin_base_path =  os.path.abspath(os.path.join(base_path, origin_folder))
     embedding_folder = os.path.join('..', '2.embedding/CGCN_S')
@@ -325,11 +325,11 @@ def cgcn_structural_embedding(dataset, learning_type='unsupervise'):
     return
 
 
-def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+def ctgcn_connective_embedding(dataset, learning_type='unsupervise'):
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
-    embedding_folder = os.path.join('..', '2.embedding/RWTGCN_C')
-    core_folder = 'rwtgcn_cores'
+    embedding_folder = os.path.join('..', '2.embedding/CTGCN_C')
+    core_folder = 'ctgcn_cores'
     core_base_path = os.path.abspath(os.path.join(base_path, core_folder))
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -344,14 +344,14 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
     print('max time num: ', max_time_num)
 
     t1 = time.time()
-    print('start RWTGCN_C embedding on ' + dataset)
+    print('start CTGCN_C embedding on ' + dataset)
     if learning_type == 'unsupervise':
-        walk_pair_folder = 'rwtgcn_walk_pairs'
-        node_freq_folder = 'rwtgcn_node_freq'
+        walk_pair_folder = 'ctgcn_walk_pairs'
+        node_freq_folder = 'ctgcn_node_freq'
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
 
-        embedding_folder = os.path.join('..', '2.embedding/RWTGCN_C')
+        embedding_folder = os.path.join('..', '2.embedding/CTGCN_C')
         for idx in range(max_time_num - duration, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
@@ -360,13 +360,13 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
             node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=time_num)
             neg_freq_list = data_loader.get_neg_freq_list(node_freq_base_path, start_idx=idx, duration=time_num)
 
-            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=time_num, bias=True, rnn_type='GRU', version='C', trans_version='L')
-            rwtgcn_loss = UnsupervisedLoss(neg_num=150, Q=10, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
-            rwtgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
-                                              node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
-                                              loss=rwtgcn_loss, max_time_num=max_time_num)
-            rwtgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
-                                   weight_decay=5e-4, model_file='rwtgcn_c', embedding_type='connection', export=True)
+            ctgcn_model = CTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=time_num, bias=True, rnn_type='GRU', version='C', trans_version='L')
+            ctgcn_loss = UnsupervisedLoss(neg_num=150, Q=10, node_pair_list=node_pair_list, neg_freq_list=neg_freq_list)
+            ctgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
+                                              node_list=nodes_set['node'].tolist(), model=ctgcn_model,
+                                              loss=ctgcn_loss, max_time_num=max_time_num)
+            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+                                   weight_decay=5e-4, model_file='ctgcn_c', embedding_type='connection', export=True)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -378,24 +378,24 @@ def rwtgcn_connective_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=1)
             x_list = data_loader.get_feature_list(None, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=duration, bias=True, rnn_type='GRU', version='C', trans_version='L')
-            rwtgcn_loss = SupervisedLoss(label_list)
-            rwtgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
-                                            node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
-                                            loss=rwtgcn_loss, max_time_num=max_time_num)
-            rwtgcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
-                                      weight_decay=5e-4, model_file='rwtgcn_c', embedding_type='connection',  export=True)
+            ctgcn_model = CTGCN(input_dim=node_num, hidden_dim=500, output_dim=128, trans_num=1, diffusion_num=2, duration=duration, bias=True, rnn_type='GRU', version='C', trans_version='L')
+            ctgcn_loss = SupervisedLoss(label_list)
+            ctgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
+                                            node_list=nodes_set['node'].tolist(), model=ctgcn_model,
+                                            loss=ctgcn_loss, max_time_num=max_time_num)
+            ctgcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+                                      weight_decay=5e-4, model_file='ctgcn_c', embedding_type='connection',  export=True)
 
     t2 = time.time()
-    print('finish RWTGCN_C embedding! cost time: ', t2 - t1, ' seconds!')
+    print('finish CTGCN_C embedding! cost time: ', t2 - t1, ' seconds!')
     return
 
-def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
-    base_path = os.path.abspath(os.path.join(os.getcwd(), '../..', 'data/' + dataset + '/RWT-GCN'))
+def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
+    base_path = os.path.abspath(os.path.join(os.getcwd(), '../data/' + dataset + '/CTGCN'))
     origin_folder = os.path.join('..', '1.format')
     origin_base_path =  os.path.abspath(os.path.join(base_path, origin_folder))
-    embedding_folder = os.path.join('..', '2.embedding/RWTGCN_S')
-    core_folder = 'rwtgcn_cores'
+    embedding_folder = os.path.join('..', '2.embedding/CTGCN_S')
+    core_folder = 'ctgcn_cores'
     core_base_path = os.path.abspath(os.path.join(base_path, core_folder))
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
@@ -410,22 +410,22 @@ def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
     print('max time num: ', max_time_num)
 
     t1 = time.time()
-    print('start RWTGCN_S embedding on ' + dataset)
+    print('start CTGCN_S embedding on ' + dataset)
     if learning_type == 'unsupervise':
-        embedding_folder = os.path.join('..', '2.embedding/RWTGCN_S')
+        embedding_folder = os.path.join('..', '2.embedding/CTGCN_S')
         for idx in range(max_time_num - duration, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_num)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=time_num, bias=True, rnn_type='GRU', version='S', trans_version='N')
-            rwtgcn_loss = UnsupervisedLoss()
-            rwtgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
-                                              node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
-                                              loss=rwtgcn_loss, max_time_num=max_time_num)
-            rwtgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
-                                   weight_decay=5e-4, model_file='rwtgcn_s', embedding_type='structure', export=True)
+            ctgcn_model = CTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=time_num, bias=True, rnn_type='GRU', version='S', trans_version='N')
+            ctgcn_loss = UnsupervisedLoss()
+            ctgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
+                                              node_list=nodes_set['node'].tolist(), model=ctgcn_model,
+                                              loss=ctgcn_loss, max_time_num=max_time_num)
+            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+                                   weight_decay=5e-4, model_file='ctgcn_s', embedding_type='structure', export=True)
     else:
         label_file = os.path.join('..', 'nodes_set/labels.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -437,16 +437,16 @@ def rwtgcn_structural_embedding(dataset, learning_type='unsupervise'):
             adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=1)
             x_list, max_degree, _ = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration)
 
-            rwtgcn_model = RWTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=duration, bias=True, rnn_type='GRU', version='S', trans_version='N')
-            rwtgcn_loss = SupervisedLoss(label_list)
-            rwtgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
-                                            node_list=nodes_set['node'].tolist(), model=rwtgcn_model,
-                                            loss=rwtgcn_loss, max_time_num=max_time_num)
-            rwtgcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
-                                      weight_decay=5e-4, model_file='rwtgcn_s', embedding_type='structure', export=True)
+            ctgcn_model = CTGCN(input_dim=max_degree, hidden_dim=500, output_dim=128, trans_num=3, diffusion_num=1, duration=duration, bias=True, rnn_type='GRU', version='S', trans_version='N')
+            ctgcn_loss = SupervisedLoss(label_list)
+            ctgcn = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
+                                            node_list=nodes_set['node'].tolist(), model=ctgcn_model,
+                                            loss=ctgcn_loss, max_time_num=max_time_num)
+            ctgcn.learn_embedding(adj_list, x_list, epoch=50, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+                                      weight_decay=5e-4, model_file='ctgcn_s', embedding_type='structure', export=True)
 
     t2 = time.time()
-    print('finish RWTGCN_S embedding! cost time: ', t2 - t1, ' seconds!')
+    print('finish CTGCN_S embedding! cost time: ', t2 - t1, ' seconds!')
     return
 
 if __name__ == '__main__':
@@ -455,6 +455,6 @@ if __name__ == '__main__':
     #gat_embedding(dataset=dataset)
     #evolvegcn_embedding(dataset=dataset)
     # cgcn_connective_embedding(dataset=dataset)
-    # rwtgcn_connective_embedding(dataset=dataset)
+    # ctgcn_connective_embedding(dataset=dataset)
     # cgcn_structural_embedding(dataset=dataset)
-    rwtgcn_structural_embedding(dataset=dataset)
+    ctgcn_structural_embedding(dataset=dataset)

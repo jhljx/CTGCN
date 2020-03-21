@@ -6,7 +6,7 @@ from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.model_selection import cross_val_predict
 from sklearn.metrics import mean_squared_error
 sys.path.append("..")
-from RWTGCN.utils import check_and_make_path
+from CTGCN.utils import check_and_make_path
 
 class DataGenerator(object):
     base_path: str
@@ -188,15 +188,15 @@ class EquivalencePredictor(object):
 
 if __name__ == '__main__':
     dataset = 'blogcatalog'
-    data_generator = DataGenerator(base_path="../../data/" + dataset, input_folder="1.format",
+    data_generator = DataGenerator(base_path="../data/" + dataset, input_folder="1.format",
                                    output_folder="equ_prediction_data", node_file="nodes_set/nodes.csv")
     # data_generator.generate_all_node_samples(worker=10)
 
-    equivalence_predictor = EquivalencePredictor(base_path="../../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
+    equivalence_predictor = EquivalencePredictor(base_path="../data/" + dataset, origin_folder='1.format', embedding_folder="2.embedding",
                                    equ_folder="equ_prediction_data", output_folder="equ_prediction_res", node_file="nodes_set/nodes.csv")
 
     # method_list = ['deepwalk', 'node2vec', 'struct2vec', 'GCN', 'dyGEM', 'timers', 'EvolveGCNH']
-    method_list = ['RWTGCN_C', 'RWTGCN_S']
+    method_list = ['CTGCN_C', 'CTGCN_S']
 
     t1 = time.time()
     equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=10)

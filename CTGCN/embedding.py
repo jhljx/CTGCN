@@ -6,7 +6,7 @@ import gc
 sys.path.append("..")
 import torch
 import torch.nn as nn
-from RWTGCN.utils import check_and_make_path, get_normalize_adj, get_sp_adj_mat, sparse_mx_to_torch_sparse_tensor
+from CTGCN.utils import check_and_make_path, get_normalize_adj, get_sp_adj_mat, sparse_mx_to_torch_sparse_tensor
 
 class DataLoader:
     full_node_list: list
@@ -176,7 +176,7 @@ class SupervisedEmbedding(BaseEmbedding):
         super(SupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
 
     def learn_embedding(self, adj_list, x_list, epoch=50, batch_size=10240, alpha=1, lr=1e-3,
-                        start_idx=0, weight_decay=0., model_file='rwtgcn', embedding_type='connection', load_model=False, export=True):
+                        start_idx=0, weight_decay=0., model_file='ctgcn', embedding_type='connection', load_model=False, export=True):
 
         return
 
@@ -186,7 +186,7 @@ class UnsupervisedEmbedding(BaseEmbedding):
         super(UnsupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, max_time_num, model_folder=model_folder)
 
     def learn_embedding(self, adj_list, x_list, single_output=True, epoch=50, batch_size=10240, lr=1e-3,
-                        start_idx=0, weight_decay=0., model_file='rwtgcn', embedding_type='connection', load_model=False, export=True):
+                        start_idx=0, weight_decay=0., model_file='ctgcn', embedding_type='connection', load_model=False, export=True):
         print('start learning embedding!')
         st = time.time()
         model = self.model
