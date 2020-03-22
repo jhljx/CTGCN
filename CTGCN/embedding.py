@@ -75,37 +75,52 @@ class DataLoader:
     def get_degree_feature_list(self, origin_base_path, start_idx, duration, init='gaussian'):
         x_list = []
         max_degree = 0
+        adj_list = []
         degree_list = []
         ret_degree_list = []
         date_dir_list = sorted(os.listdir(origin_base_path))
         for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
             original_graph_path = os.path.join(origin_base_path, date_dir_list[i])
             adj = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
+            adj_list.append(adj)
             degrees = adj.sum(axis=1).astype(np.int)
             max_degree = max(max_degree, degrees.max())
             degree_list.append(degrees)
             ret_degree_list.append(torch.FloatTensor(degrees).cuda() if torch.cuda.is_available() else degrees)
-        for degrees in degree_list:
-            if init == 'gaussian': # gaussian degree feature (has the best performance)
+        for i, degrees in enumerate(degree_list):
+            # other structural feature initialization techiniques can also be tried to improve performance
+            if init == 'gaussian':
                 fea_list = []
                 for degree in degrees:
-                    fea_list.append(np.random.normal(degree / max_degree, 0.001, max_degree + 1))
+                    fea_list.append(np.random.normal(degree, 0.0001, max_degree + 1))
                 fea_arr = np.array(fea_list)
                 fea_tensor = torch.FloatTensor(fea_arr)
                 x_list.append(fea_tensor.cuda() if torch.cuda.is_available() else fea_tensor)
+                return x_list, fea_arr.shape[1], ret_degree_list
+            elif init == 'combine':
+                fea_list = []
+                for degree in degrees:
+                    fea_list.append(np.random.normal(degree, 0.0001, max_degree + 1))
+                fea_arr = np.array(fea_list)
+                ###################
+                # here combine the adjacent matrix feature could improve strcutral role classification performance,
+                # but if the graph is large, adj feature will be memory consuming
+                fea_arr = np.hstack((fea_arr, adj_list[i].toarray()))
+                ###################
+                fea_tensor = torch.FloatTensor(fea_arr)
+                x_list.append(fea_tensor.cuda() if torch.cuda.is_available() else fea_tensor)
+                return x_list, fea_arr.shape[1], ret_degree_list
             elif init == 'one-hot': # one-hot degree feature
                 data = np.ones(degrees.shape[0], dtype=np.int)
                 row = np.arange(degrees.shape[0])
                 col = degrees.flatten().A[0]
-                # print('col shape:', col.shape)
                 spmat = sp.csr_matrix((data, (row, col)), shape=(degrees.shape[0], max_degree + 1))
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
                 x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
-            # anthoer kind of x feature is adj feature, x_list = adj_list
+                print('max degree: ', max_degree + 1)
+                return x_list, max_degree + 1, ret_degree_list
             else:
                 raise AttributeError('Unsupported feature initialization type!')
-        print('max degree: ', max_degree + 1)
-        return x_list, max_degree + 1, ret_degree_list
 
     def get_feature_list(self, feature_base_path, start_idx, duration):
         if feature_base_path is None:
@@ -235,12 +250,12 @@ class SupervisedEmbedding(BaseEmbedding):
                     loss_val, acc_val = self.loss(cls_list, idx_val, label_val, loss_type=embedding_type, structure_list=structure_list, emb_list=embedding_list)
                     print('Epoch: ' + str(i + 1), 'loss_train: {:.4f}'.format(loss_train.item()), 'acc_train: {:.4f}'.format(acc_train.item()),
                           'loss_val: {:.4f}'.format(loss_val.item()), 'acc_val: {:.4f}'.format(acc_val.item()), 'cost time: {:.4f}s'.format(time.time() - t1))
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
                     if acc_val > best_acc:
                         best_acc = acc_val
                         torch.save(model.state_dict(), os.path.join(self.model_base_path, model_file))
                         torch.save(classifier.state_dict(), os.path.join(self.model_base_path, classifier_file))
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 # t2 = time.time()
                 # print("epoch", i + 1, ', batch num = ', j + 1, ", loss train:", loss_train.item(), ', cost time: ', t2 - t1, ' seconds!')
         model.load_state_dict(torch.load(os.path.join(self.model_base_path, model_file)))
@@ -338,14 +353,13 @@ class UnsupervisedEmbedding(BaseEmbedding):
                 if j == batch_num - 1:
                     optimizer.step()  # update gradient
                     model.zero_grad()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
                 t2 = time.time()
                 print("epoch", i + 1, ', batch num = ', j + 1, ", loss:", loss.item(), ', cost time: ', t2 - t1, ' seconds!')
 
         if export:
             if embedding_type == 'connection':
-                #print('connection')
                 output_list = embedding_list
             elif embedding_type == 'structure':
                 output_list = structure_list

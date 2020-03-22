@@ -386,8 +386,6 @@ def ctgcn_connective_embedding(dataset, learning_type='unsupervise'):
         node_freq_folder = 'ctgcn_node_freq'
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
-
-        embedding_folder = os.path.join('..', '2.embedding/CTGCN_C')
         for idx in range(0, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
@@ -439,7 +437,7 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
     core_base_path = os.path.abspath(os.path.join(base_path, core_folder))
     node_file = os.path.join('..', 'nodes_set/nodes.csv')
 
-    duration = 5
+    duration = 1
 
     max_time_num = len(os.listdir(core_base_path))
     node_path = os.path.abspath(os.path.join(base_path, node_file))
@@ -452,7 +450,6 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
     t1 = time.time()
     print('start CTGCN_S embedding on ' + dataset)
     if learning_type == 'unsupervise':
-        embedding_folder = os.path.join('..', '2.embedding/CTGCN_S')
         for idx in range(0, max_time_num, duration):
             print('idx = ', idx)
             time_num = min(duration, max_time_num - idx)
@@ -464,9 +461,8 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
             ctgcn = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder,
                                               node_list=nodes_set['node'].tolist(), model=ctgcn_model,
                                               loss=ctgcn_loss, max_time_num=max_time_num)
-            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=2, batch_size=4096 * 8, lr=0.001, start_idx=idx,
+            ctgcn.learn_embedding(adj_list, x_list, single_output=False, epoch=20, batch_size=4096 * 8, lr=0.001, start_idx=idx,
                                    weight_decay=5e-4, model_file='ctgcn_s', embedding_type='structure', export=True)
-            break
     elif learning_type == 'supervise':
         label_file = os.path.join('..', 'nodes_set/trans_label.csv')
         label_path = os.path.abspath(os.path.join(base_path, label_file))
@@ -495,11 +491,11 @@ def ctgcn_structural_embedding(dataset, learning_type='unsupervise'):
     return
 
 if __name__ == '__main__':
-    dataset = 'facebook'
+    dataset = 'europe_air'
     #gcn_embedding(dataset=dataset)
     # gat_embedding(dataset=dataset)
-    evolvegcn_embedding(dataset=dataset)
-    cgcn_connective_embedding(dataset=dataset)
-    ctgcn_connective_embedding(dataset=dataset)
-    cgcn_structural_embedding(dataset=dataset)
+    #evolvegcn_embedding(dataset=dataset)
+    #cgcn_connective_embedding(dataset=dataset)
+    #ctgcn_connective_embedding(dataset=dataset)
+    #cgcn_structural_embedding(dataset=dataset)
     ctgcn_structural_embedding(dataset=dataset)

@@ -155,25 +155,41 @@ class CTGCN(nn.Module):
                 raise AttributeError('Unsupported CTGCN version!')
         if self.rnn_type == 'LSTM':
             self.rnn = LSTMCell(output_dim, output_dim, bias=bias)
-            # self.lstm = nn.LSTM(input_size=output_dim, hidden_size=output_dim, num_layers=1, bidirectional=False)
         elif self.rnn_type == 'GRU':
             self.rnn = GRUCell(output_dim, output_dim, bias=bias)
-            # self.gru = nn.GRU(input_size=output_dim, hidden_size=output_dim, num_layers=1, bidirectional=False)
         else:
             raise AttributeError('unit type error!')
-        self.norm = nn.LayerNorm(output_dim)
 
     def forward(self, x_list, adj_list):
-        if torch.cuda.is_available():
-            hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim).cuda())
+        if self.rnn_type == 'GRU':
+            if torch.cuda.is_available():
+                hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim).cuda())
+            else:
+                hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
+            trans_list = []
+            hx_list = []
+            for i in range(len(x_list)):
+                x = self.mlp_list[i](x_list[i])
+                trans_list.append(x)
+                x = self.duffision_list[i](x, adj_list[i])
+                hx = self.rnn(x, hx)
+                hx_list.append(hx)
+            return hx_list, trans_list
+        elif self.rnn_type == 'LSTM':
+            if torch.cuda.is_available():
+                hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim).cuda())
+                cx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim).cuda())
+            else:
+                hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
+                cx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
+            trans_list = []
+            hx_list = []
+            for i in range(len(x_list)):
+                x = self.mlp_list[i](x_list[i])
+                trans_list.append(x)
+                x = self.duffision_list[i](x, adj_list[i])
+                hx, cx = self.rnn(x, hx, cx)
+                hx_list.append(hx)
+            return hx_list, trans_list
         else:
-            hx = Variable(torch.zeros(x_list[0].size()[0], self.output_dim))
-        trans_list = []
-        hx_list = []
-        for i in range(len(x_list)):
-            x = self.mlp_list[i](x_list[i])
-            trans_list.append(x)
-            x = self.duffision_list[i](x, adj_list[i])
-            hx = self.rnn(x, hx)
-            hx_list.append(hx)
-        return hx_list, trans_list
+            raise AttributeError('Unsupported rnn type!')

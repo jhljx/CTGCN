@@ -201,8 +201,8 @@ class MLP(nn.Module):
                 self.linears.append(Linear(hidden_dim, hidden_dim, bias=bias))
             self.linears.append(Linear(hidden_dim, output_dim, bias=bias))
 
-            for layer in range(num_layers - 1):
-                self.batch_norms.append(nn.BatchNorm1d((hidden_dim)))
+            # for layer in range(num_layers - 1):
+            #     self.batch_norms.append(nn.BatchNorm1d((hidden_dim)))
 
     def forward(self, x):
         if self.linear_or_not:
@@ -211,17 +211,17 @@ class MLP(nn.Module):
             if self.trans_version == 'L':
                 return x
             elif self.trans_version == 'N':
-                return F.relu(x)
+                return F.selu(x)
             else:
                 raise ValueError("Unsupported trans version!")
         else:
             # If MLP
             h = x
-            for layer in range(self.num_layers - 1):
+            for layer in range(self.num_layers):
                 if self.trans_version == 'L':
-                    h = self.batch_norms[layer](self.linears[layer](h))
+                    h = self.linears[layer](h)
                 elif self.trans_version == 'N':
-                    h = F.relu(self.batch_norms[layer](self.linears[layer](h)))
+                    h = F.selu(self.linears[layer](h))
                 else:
                     raise ValueError("Unsupported trans version!")
-            return self.linears[self.num_layers - 1](h)
+            return h

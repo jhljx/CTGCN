@@ -143,7 +143,7 @@ class SupervisedLoss(nn.Module):
                     structure_mat = structure_list
                 ######################
                 # this block is quite important, otherwise the code will cause memory leak!
-                node_idxs = torch.LongTensor(batch_node_idxs)
+                #node_idxs = torch.LongTensor(batch_node_idxs)
                 labels = torch.LongTensor(batch_labels)
                 if torch.cuda.is_available():
                     node_idxs = node_idxs.cuda()
