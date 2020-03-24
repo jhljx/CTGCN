@@ -62,3 +62,6 @@ K-Core based Temporal Graph Convolutional Network for Dynamic Graphs
 2. Weighted random walk are set as default in the 'get_walk_info' function of 'CTGCN/preprocessing/walk_generation.py' file.
 3. The original graph edge data don't need to have a reverse edge for each edge, the procedure will add reverse edges in 'get_sp_adj_mat' / 'get_nx_graph' function of 'CTGCN/utils.py' file. All graph data sets are read by these two functions.
 4. The original graph file header must be 'from_id, to_id, weight', or you will modify the 'get_nx_graph' function of 'CTGCN/utils.py' file. 'get_sp_adj_mat' don't care the concrete header name, as long as the first 2 columns are node idxs and the last column is edge weight. 
+
+# Reference
+- [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902)
