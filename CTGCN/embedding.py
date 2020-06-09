@@ -79,6 +79,7 @@ class DataLoader:
         degree_list = []
         ret_degree_list = []
         date_dir_list = sorted(os.listdir(origin_base_path))
+        # find the maximal degree
         for i in range(start_idx, min(start_idx + duration, self.max_time_num)):
             original_graph_path = os.path.join(origin_base_path, date_dir_list[i])
             adj = get_sp_adj_mat(original_graph_path, self.full_node_list, sep='\t')
@@ -87,6 +88,8 @@ class DataLoader:
             max_degree = max(max_degree, degrees.max())
             degree_list.append(degrees)
             ret_degree_list.append(torch.FloatTensor(degrees).cuda() if torch.cuda.is_available() else degrees)
+        # generate degree_based features
+        ret_shape = 0
         for i, degrees in enumerate(degree_list):
             # other structural feature initialization techiniques can also be tried to improve performance
             if init == 'gaussian':
@@ -94,9 +97,10 @@ class DataLoader:
                 for degree in degrees:
                     fea_list.append(np.random.normal(degree, 0.0001, max_degree + 1))
                 fea_arr = np.array(fea_list)
+                ret_shape = fea_arr.shape[1]
                 fea_tensor = torch.FloatTensor(fea_arr)
                 x_list.append(fea_tensor.cuda() if torch.cuda.is_available() else fea_tensor)
-                return x_list, fea_arr.shape[1], ret_degree_list
+                
             elif init == 'combine':
                 fea_list = []
                 for degree in degrees:
@@ -107,9 +111,10 @@ class DataLoader:
                 # but if the graph is large, adj feature will be memory consuming
                 fea_arr = np.hstack((fea_arr, adj_list[i].toarray()))
                 ###################
+                ret_shape = fea_arr.shape[1]
                 fea_tensor = torch.FloatTensor(fea_arr)
                 x_list.append(fea_tensor.cuda() if torch.cuda.is_available() else fea_tensor)
-                return x_list, fea_arr.shape[1], ret_degree_list
+                
             elif init == 'one-hot': # one-hot degree feature
                 data = np.ones(degrees.shape[0], dtype=np.int)
                 row = np.arange(degrees.shape[0])
@@ -118,9 +123,11 @@ class DataLoader:
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
                 x_list.append(sptensor.cuda() if torch.cuda.is_available() else sptensor)
                 print('max degree: ', max_degree + 1)
-                return x_list, max_degree + 1, ret_degree_list
+                ret_shape = max_degree + 1
+                
             else:
                 raise AttributeError('Unsupported feature initialization type!')
+        return x_list, ret_shape, ret_degree_list
 
     def get_feature_list(self, feature_base_path, start_idx, duration):
         if feature_base_path is None:
