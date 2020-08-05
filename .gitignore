@@ -132,3 +132,4 @@ dmypy.json
 *.c
 *.pyd
 */build/*
+*.DS_Store
