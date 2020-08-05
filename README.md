@@ -37,7 +37,7 @@ https://pytorch-geometric.com/whl/. Note that in this project, the NVIDIA-SMI ve
         evaluation/                  (evaluation tasks, i.e. link prediction, node classification, ...)  
         preprocessing/               (preprocessing tasks, i.e. k-core decomposition, random walk)  
         embedding.py                 (data loader and different kinds of embedding)  
-        graph.py                     (dynamic graph generation for static graphs and scalability data generation)  
+        graph.py                     (dynamic graph generation and scalability data generation)  
         layers.py                    (All layers used in CTGCN)  
         main.py                      (Main file of this project)
         metrics.py                   (Loss function)  
