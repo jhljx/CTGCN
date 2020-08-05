@@ -34,7 +34,7 @@ https://pytorch-geometric.com/whl/. Note that in this project, the NVIDIA-SMI ve
                 nodes_set/                 (node list file)    
             facebook/
             ......
-        evaluation/                  (evaluation tasks, i.e. link prediction, node classification...)  
+        evaluation/                  (evaluation tasks, i.e. link prediction, node classification)  
         preprocessing/               (preprocessing tasks, i.e. k-core decomposition, random walk)  
         embedding.py                 (data loader and different kinds of embedding)  
         graph.py                     (dynamic graph generation and scalability data generation)  
