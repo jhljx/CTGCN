@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 # Graph Convolutional Network. For more information, please refer to https://arxiv.org/abs/1609.02907
-# We modify and simplify the code of GCN in https://github.com/tkipf/pygcn, and include this method in our graph embedding project framework.
+# We copy some code of GCN in https://github.com/tkipf/pygcn, and include this method in our graph embedding project framework.
 # # Author: jhljx
 # # Email: jhljx8918@gmail.com
 
@@ -145,5 +145,4 @@ class GCN(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, self.dropout, training=self.training)
         x = self.conv_out(x, edge_index)
-        # x = F.normalize(x, p=2, dim=-1)
         return x

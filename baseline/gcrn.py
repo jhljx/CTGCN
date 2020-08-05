@@ -1,10 +1,7 @@
 # coding: utf-8
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
 from baseline.gcn import GCN
-from layers import GRUCell, LSTMCell
 
 # Graph Convolutional Recurrent Network = Graph Convolutional Network + Gated Recurrent Unit
 # This model is similar to the model proposed in paper 'Structured Sequence Modeling with Graph Convolutional Recurrent Networks'.
@@ -43,7 +40,6 @@ class GCRN(nn.Module):
         self.gcn_list = nn.ModuleList()
         for i in range(self.duration):
             self.gcn_list.append(GCN(input_dim, feature_dim, hidden_dim, output_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias))
-            # self.gcn = GCN(input_dim, feature_dim, hidden_dim, output_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
         assert self.rnn_type in ['LSTM', 'GRU']
         if self.rnn_type == 'LSTM':
             self.rnn = nn.LSTM(output_dim, output_dim, num_layers=1, bias=bias, batch_first=True)
@@ -53,17 +49,11 @@ class GCRN(nn.Module):
 
     def forward(self, x_list, edge_list):
         time_num = len(x_list)
-        print('time num = ', time_num)
         hx_list = []
         for i in range(time_num):
             x = self.gcn_list[i](x_list[i], edge_list[i])
             hx_list.append(x)
         hx = torch.stack(hx_list, dim=0).transpose(0, 1)
-        print('hx shape: ', hx.shape)
         out, _ = self.rnn(hx)
-        #print('out shape: ', out.shape)
-        # out = out[:, -1, :]  # [batch_size, time, output_dim]
-        # out = F.normalize(out, p=2, dim=1)
         out = self.norm(out)
         return out.transpose(0, 1)
-        # return hx_list

@@ -73,7 +73,6 @@ class CoreDiffusion(nn.Module):
         output, _ = self.rnn(hx)
         output = output.sum(dim=1)
         output = self.norm(output)
-
         return output
         # else:
         #     hx = Variable(torch.zeros(x.shape[0], self.output_dim, device=x.device))

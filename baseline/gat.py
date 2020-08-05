@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 
 # Graph Attention Networks. For more information, please refer to https://arxiv.org/abs/1710.10903
-# We modify and simplify the code of GAT in https://github.com/Diego999/pyGAT, and include this method in our graph embedding project framework.
+# We copy some code of GAT in https://github.com/Diego999/pyGAT, and include this method in our graph embedding project framework.
 # # Author: jhljx
 # # Email: jhljx8918@gmail.com
 
@@ -205,5 +205,4 @@ class GAT(torch.nn.Module):
             x = F.relu(x)
             F.dropout(x, self.dropout, training=self.training)
         x = self.conv_out(x, edge_index)
-        # x = F.normalize(x, p=2, dim=-1)
         return x

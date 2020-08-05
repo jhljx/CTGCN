@@ -47,6 +47,7 @@ class EvolveGCN(torch.nn.Module):
         # output = self.norm(output)
         return Nodes_list
 
+
 class GRCU(torch.nn.Module):
     def __init__(self, input_dim, output_dim, egcn_type='EGCNH'):
         super().__init__()

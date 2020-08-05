@@ -5,6 +5,12 @@ import torch.nn.functional as F
 import torch_geometric as tg
 
 
+# Graph Isomorphism Network. For more information, please refer to https://arxiv.org/abs/1810.00826
+# We copy some code of GIN in https://github.com/JiaxuanYou/P-GNN, and include this method in our graph embedding project framework.
+# # Author: jhljx
+# # Email: jhljx8918@gmail.com
+
+
 class GIN(torch.nn.Module):
     input_dim: int
     feature_dim: int
@@ -61,5 +67,4 @@ class GIN(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, self.dropout, training=self.training)
         x = self.conv_out(x, edge_index)
-        # x = F.normalize(x, p=2, dim=-1)
         return x
