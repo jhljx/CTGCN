@@ -1,7 +1,7 @@
 # CTGCN
 K-Core based Temporal Graph Convolutional Network for Dynamic Graphs
 
-**CTGCN Requirements:**
+# CTGCN Requirements
 - [Python](https://www.python.org/downloads/) >= 3.6
 - [Numpy](https://github.com/numpy/numpy) >= 1.18.1
 - [Pandas](https://github.com/pandas-dev/pandas) >= 1.0.5
@@ -20,7 +20,7 @@ If you want to use baselines provided by this project, other python libraries ar
 Some binaries of pytorch-geometric related libraries can be found in 
 https://pytorch-geometric.com/whl/. Note that in this project, the NVIDIA-SMI version is 418.67 and the CUDA version is 10.1.
 
-**Directory:**
+# Directory
     
     CTGCN/    
         baseline/                    (implemented baselines, i.e. GCN, GAT, P-GNN, EvolveGCN, VGRNN ...)  
@@ -39,12 +39,13 @@ https://pytorch-geometric.com/whl/. Note that in this project, the NVIDIA-SMI ve
         embedding.py                 (data loader and different kinds of embedding)  
         graph.py                     (dynamic graph generation for static graphs and scalability data generation)  
         layers.py                    (All layers used in CTGCN)  
+        main.py                      (Main file of this project)
         metrics.py                   (Loss function)  
         models.py                    (All models of CTGCN)  
         train.py                     (main file used to train different embedding methods)  
         utils.py                     (utility functions)          
 
-**Commands:**
+# Commands & Functions
 
 We provide a docker file to help you build a docker environment. The docker commands of creating CTGCN containers are:
 
@@ -84,11 +85,13 @@ This project has several functions, including: **preprocessing**, **graph embedd
 
 6. **Regular Equivalence Prediction**: perform regular equivalence prediction on several dynamic graph data sets to test the performance of graph embedding approaches. 
 
-      python3 main.py --config=config/america_air.json --task=equ_pred
+       python3 main.py --config=config/america_air.json --task=equ_pred
 
-The detailed configuration information can be found in [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config).
+# Parameter Configurations
 
-**Baselines:**
+All other configuration parameters are saved in configuration files. For more detailed configuration information, please refer to [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config).
+
+# Baselines
 
 We provide unified pytorch (or python) version of many graph embedding approaches in this project.
 
@@ -107,14 +110,14 @@ We provide unified pytorch (or python) version of many graph embedding approache
    - dynRNN　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynRNN.py) 
    - dynAERNN　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynAERNN.py) 
 
-11. Restart SVD (TIMERS)　[\[paper\]](https://arxiv.org/abs/1711.09541)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/timers.py)   
+11. Theoretically Instructed Maximum-Error-bounded Restart of SVD (TIMERS)　[\[paper\]](https://arxiv.org/abs/1711.09541)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/timers.py)   
 
 
 # Notes
-1. Origin graph file names must be timestamp format or integer number format(other wise when training dynamic embedding, sorted(f_list) may return a wrong order of files)
-2. Weighted random walk are set as default in the `get_walk_info` function of 'CTGCN/preprocessing/walk_generation.py' file.
-3. The original graph edge data doesn't need to have a reverse edge for each edge, because the graph read functions (`get_sp_adj_mat` and `get_nx_graph` functions in 'CTGCN/utils.py') will add reverse edges automatically. All graph data sets are read by `get_sp_adj_mat` and `get_nx_graph` functions.
-4. The original graph file header must be 'from_id, to_id, weight', or you will modify the 'get_nx_graph' function of 'CTGCN/utils.py' file. `get_sp_adj_mat` don't care the concrete header name, as long as the first 2 columns are node indices. If the original graph file has only 2 columns,  `get_sp_adj_mat` function will set edge weights as 1 in the 3rd column. If the original graph file has 3 columns, `get_sp_adj_mat` function will set edge weights as values the 3rd column.
+1. Origin graph file names must be timestamp format or integer number format, otherwise when training dynamic embedding, sorted(f_list) may return a wrong order of files.
+2. Weighted random walk are set as default in the `get_walk_info` function of 'preprocessing/walk_generation.py' file.
+3. The original graph edge data doesn't need to have a reverse edge for each edge, because the graph read functions (`get_sp_adj_mat` and `get_nx_graph` functions in 'utils.py') will add reverse edges automatically. All graph data sets are read by `get_sp_adj_mat` and `get_nx_graph` functions.
+4. The original graph file header must be 'from_id, to_id, weight', or you will modify the 'get_nx_graph' function of 'utils.py' file. `get_sp_adj_mat` don't care the concrete header name, as long as the first 2 columns are node indices. If the original graph file has only 2 columns,  `get_sp_adj_mat` function will set edge weights as 1 in the 3rd column. If the original graph file has 3 columns, `get_sp_adj_mat` function will set edge weights as values the 3rd column.
 
 # Reference
 - [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902)
