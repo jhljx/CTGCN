@@ -95,22 +95,22 @@ All other configuration parameters are saved in configuration files. For more de
 
 We provide unified pytorch (or python) version of many graph embedding approaches in this project.
 
-1. Graph Convolutional Network (GCN)　[\[paper\]](https://arxiv.org/abs/1609.02907)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcn.py)
-2. Graph Attention Network (GAT)　[\[paper\]](https://arxiv.org/abs/1710.10903)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gat.py)
-3. Sample and Aggregate (GraphSAGE)　[\[paper\]](https://arxiv.org/abs/1706.02216)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/sage.py)
-4. Graph Isomorphism Network (GIN)　[\[paper\]](https://arxiv.org/abs/1810.00826)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gin.py)   
-5. Position-aware Graph Neural Network (P-GNN)　[\[paper\]](https://arxiv.org/abs/1906.04817)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/pgnn.py)   
-6. Graph Convolutional Recurrent Network (GCRN)　[\[paper\]](https://arxiv.org/abs/1612.07659)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcrn.py)   
-7. Variational Graph Recurrent Network (VGRNN)　[\[paper\]](https://arxiv.org/abs/1908.09710)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/vgrnn.py)    
-8. Evolving Graph Convolutional Network (EvolveGCN)　[\[paper\]](https://arxiv.org/abs/1902.10191)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/egcn.py)    
-9. DynGEM　[\[paper\]](https://arxiv.org/abs/1805.11273)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynGEM.py)      
-10. dyngraph2vec　[\[paper\]](https://arxiv.org/abs/1809.02657)
+- Graph Convolutional Network (GCN)　[\[paper\]](https://arxiv.org/abs/1609.02907)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcn.py)
+- Graph Attention Network (GAT)　[\[paper\]](https://arxiv.org/abs/1710.10903)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gat.py)
+- Sample and Aggregate (GraphSAGE)　[\[paper\]](https://arxiv.org/abs/1706.02216)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/sage.py)
+- Graph Isomorphism Network (GIN)　[\[paper\]](https://arxiv.org/abs/1810.00826)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gin.py)   
+- Position-aware Graph Neural Network (P-GNN)　[\[paper\]](https://arxiv.org/abs/1906.04817)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/pgnn.py)   
+- Graph Convolutional Recurrent Network (GCRN)　[\[paper\]](https://arxiv.org/abs/1612.07659)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcrn.py)   
+- Variational Graph Recurrent Network (VGRNN)　[\[paper\]](https://arxiv.org/abs/1908.09710)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/vgrnn.py)    
+- Evolving Graph Convolutional Network (EvolveGCN)　[\[paper\]](https://arxiv.org/abs/1902.10191)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/egcn.py)    
+- Deep Embedding Method for Dynamic Graphs(DynGEM)　[\[paper\]](https://arxiv.org/abs/1805.11273)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynGEM.py)      
+- dyngraph2vec　[\[paper\]](https://arxiv.org/abs/1809.02657)
    
    - dynAE　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynAE.py)
    - dynRNN　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynRNN.py) 
    - dynAERNN　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynAERNN.py) 
 
-11. Theoretically Instructed Maximum-Error-bounded Restart of SVD (TIMERS)　[\[paper\]](https://arxiv.org/abs/1711.09541)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/timers.py)   
+- Theoretically Instructed Maximum-Error-bounded Restart of SVD (TIMERS)　[\[paper\]](https://arxiv.org/abs/1711.09541)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/timers.py)   
 
 
 # Notes
