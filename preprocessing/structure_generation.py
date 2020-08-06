@@ -27,18 +27,21 @@ class StructureInfoGenerator:
 
         check_and_make_path(self.core_base_path)
 
+    # Most real-world graphs' k-core numbers start from 0. However, SBM graphs' k-core numbers start from 40(or 70), not start from 0.
+    # Moreover, most real world graphs' k-core numbers are 0, 1, 2, 3, ... without any interval, while synthetic graph such as SBM's k-core numbers are 46,48,51,54, ..
     def get_kcore_graph(self, input_file, output_dir, sep='\t', core_list=None, degree_list=None):
         input_path = os.path.join(self.origin_base_path, input_file)
         graph = get_nx_graph(input_path, self.full_node_list, sep=sep)
         core_num_dict = nx.core_number(graph)
+        print("unique core nums: ", len(np.unique(np.array(list(core_num_dict.values())))))
         max_core_num = max(list(core_num_dict.values()))
         print('file name: ', input_file, 'max core num: ', max_core_num)
-        # x= list(graph.degree())
+        # x = list(graph.degree())
         # max_degree = max(list(zip(*x))[1])
-        # # print('max degree: ', max_degree)
+        # print('max degree: ', max_degree)
         # core_list.append(max_core_num)
         # degree_list.append(max_degree)
-        check_and_make_path(output_dir)
+        # check_and_make_path(output_dir)
 
         format_str = get_format_str(max_core_num)
         for i in range(1, max_core_num + 1):

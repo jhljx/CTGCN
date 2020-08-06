@@ -67,4 +67,5 @@ class GIN(torch.nn.Module):
             x = F.relu(x)
             x = F.dropout(x, self.dropout, training=self.training)
         x = self.conv_out(x, edge_index)
+        x = F.normalize(x, p=2, dim=-1)
         return x

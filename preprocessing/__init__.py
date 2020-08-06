@@ -23,11 +23,11 @@ class Processing:
             t2 = time.time()
             print('finish generate k core graph! cost time:', t2 - t1, 'seconds!')
 
-        # t1 = time.time()
-        # print('start generate walk info!')
-        # self.walk_generator.get_walk_info_all_time(worker=worker, sep=sep, weighted=weighted)
-        # t2 = time.time()
-        # print('finish generate walk info! cost time: ', t2 - t1, ' seconds.')
+        t1 = time.time()
+        print('start generate walk info!')
+        self.walk_generator.get_walk_info_all_time(worker=worker, sep=sep, weighted=weighted)
+        t2 = time.time()
+        print('finish generate walk info! cost time: ', t2 - t1, ' seconds.')
 
 
 # preprocessing for all supported GNN methods

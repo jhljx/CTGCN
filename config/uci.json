@@ -709,7 +709,7 @@
       "weighted": true,
       "walk_time": 20,
       "walk_length": 5,
-      "worker": -1
+      "worker": 30
     }
   },
   "link_pred":
@@ -729,7 +729,7 @@
     "do_lp": true,
     "generate": false,
     "aggregate": false,
-    "method_list": ["CTGCN-C", "CTGCN-S"],
+    "method_list": ["CTGCN-C", "CTGCN-S", "CGCN-C", "CGCN-S", "GCN", "GAT", "GIN", "GCRN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN"],
     "c_list": [0.01, 0.1, 1, 10],
     "measure_list": ["Avg", "Had", "L1", "L2"],
     "max_iter": 10000,
@@ -744,7 +744,7 @@
     "equpred_res_folder": "equpred_res",
     "file_sep": "\t",
     "generate": true,
-    "method_list": ["GCN", "GAT", "PGNN", "CGCN-C", "CGCN-S", "GCRN", "VGRNN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "TIMERS", "CTGCN-C", "CTGCN-S"],
+    "method_list": ["GCN", "GAT", "GIN", "CGCN-C", "CGCN-S", "GCRN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "CTGCN-C", "CTGCN-S"],
     "alpha_list": [0.05, 0.5, 1, 2, 5, 10],
     "split_fold": 5,
     "worker": 30

@@ -1,9 +1,7 @@
 # coding: utf-8
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from torch.autograd import Variable
-from layers import CoreDiffusion, MLP, GRUCell, LSTMCell
+from layers import CoreDiffusion, MLP
 
 
 # K-core diffusion network

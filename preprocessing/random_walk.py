@@ -63,8 +63,6 @@ def random_walk(spadj, walk_dir_path, freq_dir_path, f_name, walk_length, walk_t
     t3 = time.time()
     print('node freq time: ', t3 - t2, ' seconds!')
 
-    print('walk spadj: ', walk_spadj.tolil().rows[0])
-
     walk_file_path = os.path.join(walk_dir_path, f_name.split('.')[0] + '.npz')
     sp.save_npz(walk_file_path, walk_spadj.tocoo())
     t4 = time.time()

@@ -1,5 +1,5 @@
 # CTGCN
-K-Core based Temporal Graph Convolutional Network for Dynamic Graphs
+This repository include the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902).
 
 # CTGCN Requirements
 - [Python](https://www.python.org/downloads/) >= 3.6
@@ -95,15 +95,20 @@ All other configuration parameters are saved in configuration files. For more de
 
 We provide unified pytorch (or python) version of many graph embedding approaches in this project.
 
+**Static Graph Embedding**
+
 - Graph Convolutional Network (GCN)　[\[paper\]](https://arxiv.org/abs/1609.02907)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcn.py)
 - Graph Attention Network (GAT)　[\[paper\]](https://arxiv.org/abs/1710.10903)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gat.py)
 - Sample and Aggregate (GraphSAGE)　[\[paper\]](https://arxiv.org/abs/1706.02216)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/sage.py)
 - Graph Isomorphism Network (GIN)　[\[paper\]](https://arxiv.org/abs/1810.00826)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gin.py)   
 - Position-aware Graph Neural Network (P-GNN)　[\[paper\]](https://arxiv.org/abs/1906.04817)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/pgnn.py)   
+
+**Dynamic Graph Embedding**
+
 - Graph Convolutional Recurrent Network (GCRN)　[\[paper\]](https://arxiv.org/abs/1612.07659)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gcrn.py)   
 - Variational Graph Recurrent Network (VGRNN)　[\[paper\]](https://arxiv.org/abs/1908.09710)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/vgrnn.py)    
 - Evolving Graph Convolutional Network (EvolveGCN)　[\[paper\]](https://arxiv.org/abs/1902.10191)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/egcn.py)    
-- Deep Embedding Method for Dynamic Graphs(DynGEM)　[\[paper\]](https://arxiv.org/abs/1805.11273)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynGEM.py)      
+- Deep Embedding Method for Dynamic Graphs (DynGEM)　[\[paper\]](https://arxiv.org/abs/1805.11273)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynGEM.py)      
 - dyngraph2vec　[\[paper\]](https://arxiv.org/abs/1809.02657)
    
    - dynAE　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynAE.py)

@@ -40,167 +40,22 @@ class CoreDiffusion(nn.Module):
     #     self.att_weight.data.uniform_(0, 1)
 
     def forward(self, x, adj_list):
-        # if self.rnn_type == 'GRU':
-            # hx = Variable(torch.zeros(x.shape[0], self.output_dim, device=x.device))
-        adj_list = adj_list[::-1]
         hx_list = []
-        output = None
-        # assert len(adj_list) == core_num
+        # output = None
         for i, adj in enumerate(adj_list):
-            res = torch.sparse.mm(adj, x)
-            res = F.relu(res)
+            if i == 0:
+                res = torch.sparse.mm(adj, x)
+            else:
+                res = hx_list[-1] + torch.sparse.mm(adj, x)
             # hx = self.linear(res)
             hx_list.append(res)
-            # hx = torch.stack(hx_list, dim=0).transpose(0, 1)
-            # out, _ = self.rnn(hx)
-            # hx = self.gru(res, hx)
-            # hx_list.append(hx)
-            # if output is None:
-            #      output = hx
-            # #     # output = self.att_weight[i] * hx
-            # #     # print('output shape: ', output)
-            # else:
-            # #     # output = output + self.att_weight[i] * hx
-            #      output = output + hx
-            # hx = hx + res
-    # hx = F.normalize(hx, p=2, dim=-1)
-    #Layer normalization could improve performance and make rnn stable
-    #
-        # hx = out[:, -1, :]
-        # hx = F.normalize(hx, p=2, dim=-1)
-        # output = self.linear(output)
+        hx_list = [F.relu(res) for res in hx_list]
         hx = torch.stack(hx_list, dim=0).transpose(0, 1)  # [batch_size, core_num, input_dim]
         output, _ = self.rnn(hx)
         output = output.sum(dim=1)
+        # Layer normalization could improve performance and make rnn stable
         output = self.norm(output)
         return output
-        # else:
-        #     hx = Variable(torch.zeros(x.shape[0], self.output_dim, device=x.device))
-        #     cx = Variable(torch.zeros(x.shape[0], self.output_dim, device=x.device))
-        #     adj_list = adj_list[::-1]
-        #     for i, adj in enumerate(adj_list):
-        #         res = torch.sparse.mm(adj, hx)
-        #         res = self.linear(res)
-        #         res = F.relu(res)
-        #         # res = F.dropout(res, training=self.training)
-        #         hx, cx = self.lstm(res, hx, cx)
-        #     # hx = F.normalize(hx, p=2, dim=-1)
-        #     #Layer normalization could improve performance and make rnn stable
-        #     hx = self.norm(hx)
-        #     # hx = F.dropout(hx, training=self.training)
-        #     return hx
-
-
-# Gated Recurrent Unit(GRU) cell
-class GRUCell(nn.Module):
-    input_dim: int
-    output_dim: int
-    bias: bool
-
-    def __init__(self, input_dim, output_dim, bias=True):
-        super(GRUCell, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.bias = bias
-
-        self.x2h = nn.Linear(input_dim, 3 * output_dim, bias=bias)
-        self.h2h = nn.Linear(output_dim, 3 * output_dim, bias=bias)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        std = 1.0 / math.sqrt(self.output_dim)
-        for weight in self.parameters():
-            weight.data.uniform_(-std, std)
-
-    def forward(self, x, hidden):
-        gate_x = self.x2h(x)
-        gate_h = self.h2h(hidden)
-
-        gate_x = gate_x.squeeze()
-        gate_h = gate_h.squeeze()
-
-        i_r, i_i, i_n = gate_x.chunk(3, 1)
-        h_r, h_i, h_n = gate_h.chunk(3, 1)
-
-        resetgate = torch.sigmoid(i_r + h_r)
-        inputgate = torch.sigmoid(i_i + h_i)
-        newgate = torch.tanh(i_n + (resetgate * h_n))
-        del i_r, i_i, i_n, h_r, h_i, h_n
-        hy = newgate + inputgate * (hidden - newgate)
-        return hy
-
-
-# Long-Short Term Memory(LSTM) cell
-class LSTMCell(nn.Module):
-    input_dim: int
-    output_dim: int
-    bias: bool
-
-    def __init__(self, input_dim, output_dim, bias=True):
-        super(LSTMCell, self).__init__()
-        self.input_dim = input_dim
-        self.output_dim = output_dim
-        self.bias = bias
-
-        self.x2h = nn.Linear(input_dim, 4 * output_dim, bias=bias)
-        self.h2h = nn.Linear(output_dim, 4 * output_dim, bias=bias)
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        std = 1.0 / math.sqrt(self.output_dim)
-        for weight in self.parameters():
-            weight.data.uniform_(-std, std)
-
-    def forward(self, x, hx, cx):
-        gates = self.x2h(x) + self.h2h(hx)
-        gates = gates.squeeze()
-        ingate, forgetgate, cellgate, outgate = gates.chunk(4, 1)
-
-        ingate = torch.sigmoid(ingate)
-        forgetgate = torch.sigmoid(forgetgate)
-        cellgate = torch.tanh(cellgate)
-        outgate = torch.sigmoid(outgate)
-
-        cy = torch.mul(cx, forgetgate) + torch.mul(ingate, cellgate)
-        hy = torch.mul(outgate, torch.tanh(cy))
-        del ingate, forgetgate, cellgate, outgate
-        return hy, cy
-
-
-# # Linear layer
-# class Linear(nn.Module):
-#     input_dim: int
-#     output_dim: int
-#     bias: bool
-#
-#     def __init__(self, input_dim, output_dim, bias=True):
-#         super(Linear, self).__init__()
-#         self.input_dim = input_dim
-#         self.output_dim = output_dim
-#         self.bias = bias
-#
-#         self.weight = nn.Parameter(torch.FloatTensor(input_dim, output_dim))
-#         if bias:
-#             self.b = nn.Parameter(torch.FloatTensor(output_dim))
-#         else:
-#             self.register_parameter('bias', None)
-#         self.reset_parameters()
-#
-#     def reset_parameters(self):
-#         stdv = 1. / math.sqrt(self.output_dim)
-#         self.weight.data.uniform_(-stdv, stdv)
-#         if self.b is not None:
-#             self.b.data.uniform_(-stdv, stdv)
-#
-#     def forward(self, x):
-#         # sparse tensor
-#         if x.layout == torch.sparse_coo:
-#             support = torch.sparse.mm(x, self.weight)
-#         else:
-#             support = torch.mm(x, self.weight)
-#         if self.b is not None:
-#             return support + self.b
-#         return support
 
 
 # Multi-Layer Perceptron(MLP) 'layer'

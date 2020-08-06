@@ -179,7 +179,6 @@ def get_gnn_model(method, args):
         rnn_type = args['rnn_type']
         trans_activate_type = args['trans_activate_type']
         if method in ['CGCN-C', 'CGCN-S']:
-            print('method = ', method)
             return CGCN(input_dim, hidden_dim, embed_dim, trans_num=trans_num, diffusion_num=diffusion_num, bias=bias, rnn_type=rnn_type, model_type=model_type,
                         trans_activate_type=trans_activate_type)
         else:
@@ -288,6 +287,7 @@ def gnn_embedding(method, args):
     time_list = []
     print('start ' + method + ' embedding!')
     for idx in range(start_idx, end_idx, duration):
+        print('idx = ', idx, ', duration = ', duration)
         input_dim, adj_list, x_list, edge_list, node_dist_list = get_input_data(method, idx, data_loader, args)
         args['input_dim'] = input_dim
         model = get_gnn_model(method, args)

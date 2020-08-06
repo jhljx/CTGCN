@@ -60,16 +60,26 @@ class DataLoader:
             tmp_adj_list = []
             if max_core == -1:
                 max_core = core_file_num
+            f_list = f_list[:max_core]  # select 1 core to max core
+            f_list = f_list[::-1]  # reverse order, max core, (max - 1) core, ..., 1 core
+
             # get k-core adjacent matrices at the i-th timestamp
-            # spmat_list = []
+            spmat_list = []
             for j, f_name in enumerate(f_list):
-                if j + 1 > max_core:
-                    break
                 spmat = sp.load_npz(os.path.join(date_dir_path, f_name))
-                spmat = spmat + sp.eye(spmat.shape[0])
-                # spmat = get_normalized_adj(spmat)
+                spmat_list.append(spmat)
+                if j == 0:
+                    spmat = spmat + sp.eye(spmat.shape[0])
+                else:
+                    delta = spmat - spmat_list[j - 1]    # reduce subsequent computation complexity and reduce memory cost!
+                    if delta.sum() == 0:  # reduce computation complexity and memory cost!
+                        continue
+                # print('j = ', j, ', f_name = ', f_name)
+                # Normalization will reduce the self weight, hence affect its performance! So we omit normalization.
+                # print('j = ', j, ', spmat max: ', spmat.max(), ', spmat min: ', spmat.min())
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
                 tmp_adj_list.append(sptensor.cuda() if self.has_cuda else sptensor)
+            # print('-----------------')
             # print('time: ', i, 'core len: ', len(tmp_adj_list))
             core_adj_list.append(tmp_adj_list)
         return core_adj_list
@@ -184,7 +194,6 @@ class DataLoader:
                 fea_tensor = torch.from_numpy(expand_feature_arr).float()
                 x_list.append(fea_tensor.cuda() if self.has_cuda else fea_tensor)
             input_dim = max_feature_dim
-        print('len x_list: ', len(x_list))
         return x_list, input_dim
 
     def get_node_label_list(self, nlabel_base_path, start_idx, duration, sep='\t'):
