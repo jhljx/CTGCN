@@ -715,12 +715,13 @@
   "equ_pred":
   {
     "base_path": "/data/blogcatalog",
+    "origin_folder": "1.format",
     "embed_folder": "2.embedding",
     "node_file": "nodes_set/nodes.csv",
     "equpred_data_folder": "equpred_data",
     "equpred_res_folder": "equpred_res",
     "file_sep": "\t",
-    "generate": true,
+    "generate": false,
     "method_list": ["GCN", "GAT", "PGNN", "CGCN-C", "CGCN-S", "GCRN", "VGRNN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "TIMERS", "CTGCN-C", "CTGCN-S"],
     "alpha_list": [0.05, 0.5, 1, 2, 5, 10],
     "split_fold": 5,

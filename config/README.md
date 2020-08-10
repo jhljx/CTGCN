@@ -17,6 +17,7 @@ The parameters used in the **preprocessing** task is shown as follows. Note that
 | node_freq_folder | str | node frequency file folder path relative to `base_path` |
 | file_sep | str |  file separator for all files (i.e. '\t') |
 | generate_core | bool | whether to generate k-core subgraph files or not <br> (**optional**, value: true or false) |
+| run_walk | bool | whether to run random walk or not <br> (**optional**, value: true or false) |
 | weighted | bool | weighted graph or not, then this will determine weighted random walk or not |
 | walk_time | int | random walk times for each node |
 | walk_length | int | random walk length for each node |

@@ -42,7 +42,7 @@ class WalkGenerator:
         print('random walk tot time', t2 - t1, ' seconds!')
 
     def get_walk_info_all_time(self, worker=-1, sep='\t', weighted=True):
-        print("all file(s) in folder transform to tensor...")
+        print("perform random walk for all file(s)...")
         f_list = os.listdir(self.origin_base_path)
 
         if worker <= 0:

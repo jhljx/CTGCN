@@ -24,7 +24,7 @@ class DataLoader:
         self.has_cuda = has_cuda
 
     # get adjacent matrices for a graph list, this function supports Tensor type-based adj and sparse.coo type-based adj.
-    def get_date_adj_list(self, origin_base_path, start_idx, duration, sep='\t', normalize=False, add_eye=False, data_type='tensor'):
+    def get_date_adj_list(self, origin_base_path, start_idx, duration, sep='\t', normalize=False, row_norm=False, add_eye=False, data_type='tensor'):
         assert data_type in ['tensor', 'matrix']
         date_dir_list = sorted(os.listdir(origin_base_path))
         # print('adj list: ', date_dir_list)
@@ -36,7 +36,7 @@ class DataLoader:
             if add_eye:
                 spmat = spmat + sp.eye(spmat.shape[0])
             if normalize:
-                spmat = get_normalized_adj(spmat)
+                spmat = get_normalized_adj(spmat, row_norm=row_norm)
             # data type
             if data_type == 'tensor':
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)

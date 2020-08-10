@@ -91,7 +91,7 @@ This project has several functions, including: **preprocessing**, **graph embedd
 
 All other configuration parameters are saved in configuration files. For more detailed configuration information, please refer to [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config).
 
-# Baselines
+# Supported Graph Embedding Methods
 
 We provide unified pytorch (or python) version of many graph embedding approaches in this project.
 
@@ -102,6 +102,8 @@ We provide unified pytorch (or python) version of many graph embedding approache
 - Sample and Aggregate (GraphSAGE)　[\[paper\]](https://arxiv.org/abs/1706.02216)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/sage.py)
 - Graph Isomorphism Network (GIN)　[\[paper\]](https://arxiv.org/abs/1810.00826)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/gin.py)   
 - Position-aware Graph Neural Network (P-GNN)　[\[paper\]](https://arxiv.org/abs/1906.04817)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/pgnn.py)   
+- Connective Proximity Preserving Core-based Graph Convolutional Network(CGCN-C)
+- Structural Similarity Preserving Core-based Graph Convolutional Network(CGCN-S)
 
 **Dynamic Graph Embedding**
 
@@ -116,6 +118,8 @@ We provide unified pytorch (or python) version of many graph embedding approache
    - dynAERNN　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/dynAERNN.py) 
 
 - Theoretically Instructed Maximum-Error-bounded Restart of SVD (TIMERS)　[\[paper\]](https://arxiv.org/abs/1711.09541)　[\[code\]](https://github.com/jhljx/CTGCN/blob/master/baseline/timers.py)   
+- Connective Proximity Preserving Core-based Temporal Graph Convolutional Network(CTGCN-C)
+- Structural Similarity Preserving Core-based Temporal Graph Convolutional Network(CTGCN-S)
 
 
 # Notes

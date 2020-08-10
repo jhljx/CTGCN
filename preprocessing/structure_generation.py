@@ -36,6 +36,7 @@ class StructureInfoGenerator:
         print("unique core nums: ", len(np.unique(np.array(list(core_num_dict.values())))))
         max_core_num = max(list(core_num_dict.values()))
         print('file name: ', input_file, 'max core num: ', max_core_num)
+
         # x = list(graph.degree())
         # max_degree = max(list(zip(*x))[1])
         # print('max degree: ', max_degree)
@@ -52,10 +53,10 @@ class StructureInfoGenerator:
             A = nx.to_scipy_sparse_matrix(k_core_graph, nodelist=self.full_node_list)
             ###############################
             signature = format_str.format(i)
-            sp.save_npz(os.path.join(output_dir, signature + ".npz"), A)
+            sp.save_npz(os.path.join(output_dir, signature + '.npz'), A)
 
     def get_kcore_graph_all_time(self, sep='\t', worker=-1):
-        print("getting k-core graph for all timestamps...")
+        print("getting k-core sub-graphs for all timestamps...")
 
         f_list = os.listdir(self.origin_base_path)
         length = len(f_list)

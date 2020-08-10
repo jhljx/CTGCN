@@ -56,11 +56,11 @@ def get_input_data(method, idx, data_loader, args):
         max_core = args['max_core']
         core_adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=duration, max_core=max_core)
     if method in ['EvolveGCN']:  # normalization is quite important for the performance improvement of EvolveGCN
-        normalize, add_eye = True, True
+        normalize, row_norm, add_eye = True, False, True
     else:  # GCN, GAT, SAGE, GIN, PGNN, VGRNN
-        normalize, add_eye = False, True
+        normalize, row_norm, add_eye = False, False, True
     # print('normalize = ', normalize)
-    adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, normalize=normalize, add_eye=add_eye, data_type='tensor')
+    adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, normalize=normalize, row_norm=row_norm, add_eye=add_eye, data_type='tensor')
 
     # test
     # adj_len = len(adj_list)

@@ -706,10 +706,11 @@
       "node_freq_folder": "CTGCN/ctgcn_node_freq",
       "file_sep": "\t",
       "generate_core": true,
+      "run_walk": false,
       "weighted": true,
       "walk_time": 20,
       "walk_length": 5,
-      "worker": 30
+      "worker": -1
     }
   },
   "link_pred":
@@ -738,12 +739,13 @@
   "equ_pred":
   {
     "base_path": "/data/uci",
+    "origin_folder": "1.format",
     "embed_folder": "2.embedding",
     "node_file": "nodes_set/nodes.csv",
     "equpred_data_folder": "equpred_data",
     "equpred_res_folder": "equpred_res",
     "file_sep": "\t",
-    "generate": true,
+    "generate": false,
     "method_list": ["GCN", "GAT", "GIN", "CGCN-C", "CGCN-S", "GCRN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "CTGCN-C", "CTGCN-S"],
     "alpha_list": [0.05, 0.5, 1, 2, 5, 10],
     "split_fold": 5,

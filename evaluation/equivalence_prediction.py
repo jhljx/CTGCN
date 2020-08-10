@@ -67,6 +67,7 @@ class DataGenerator(object):
             df['weight'] = 1.0
         graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight', create_using=nx.Graph)
         graph.add_nodes_from(self.full_node_list)
+        graph.remove_edges_from(nx.selfloop_edges(graph))
         centrality_dict = dict()
         for centrality in centrality_list:
             centrality_dict[centrality] = self.get_centrality(graph, type=centrality)
