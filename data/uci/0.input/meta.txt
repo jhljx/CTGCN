@@ -1,0 +1,11 @@
+category: Communication
+code: UC
+name: UC Irvine messages
+description: User–user message
+extr: opsahl
+url: http://toreopsahl.com/datasets/#online_social_network
+long-description: This directed network contains sent messages between the users of an online community of students from the University of California, Irvine. A node represents a user. A directed edge represents a sent message. Multiple edges denote multiple messages. 
+entity-names: user
+relationship-names: message
+cite: konect:opsahl09
+timeiso:  2009
