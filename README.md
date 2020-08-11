@@ -121,12 +121,29 @@ We provide unified pytorch (or python) version of many graph embedding approache
 - Connective Proximity Preserving Core-based Temporal Graph Convolutional Network (CTGCN-C)
 - Structural Similarity Preserving Core-based Temporal Graph Convolutional Network (CTGCN-S)
 
+# Supported Data Sets
+
+This project use several data sets in link prediction, node classification and regular equivalence prediction tasks. The supported data sets are shown as follows:
+
+| **Data Set** | **Nodes** | **Edges** | **Max Degree** | **Max Core** | **Snapshots** |
+|:----:|:----:| :----: | :----: |:----: |:----: |
+| UCI | 1899 | 59835 | 198 | 16 | 7 |
+| AS  | 6828 | 1947704 | 1458 | 13 | 100 |
+| Math | 24740 | 323357 | 231 | 15 | 77 |
+| Facebook | 60730 | 607487 | 203 | 9 | 27 |
+| Enron | 87036 | 530284 | 1150 | 22 | 38 |
+| America-Air | 1190 | 13599 | 238 | 64 | 10 |
+| Europe-Air | 399 | 5995 | 202 | 33 | 10 | 
+
+In above data sets, America-Air and Europe-Air are synthetic dynamic graphs, while others are real-world dynamic graphs. Most of the aforementioned graph embedding methods can be trained on an 8G GPU when using UCI, AS, America-Air or Europe-Air data sets. For large-scale graphs such as Facebook and Enron, we recommend you to run those methods on GPU with larger memory or directly train those methods on CPU.
 
 # Notes
 1. Origin graph file names must be timestamp format or integer number format, otherwise when training dynamic embedding, sorted(f_list) may return a wrong order of files.
 2. Weighted random walk are set as default in the `get_walk_info` function of 'preprocessing/walk_generation.py' file.
 3. The original graph edge data doesn't need to have a reverse edge for each edge, because the graph read functions (`get_sp_adj_mat` and `get_nx_graph` functions in 'utils.py') will add reverse edges automatically. All graph data sets are read by `get_sp_adj_mat` and `get_nx_graph` functions.
 4. The original graph file header must be 'from_id, to_id, weight', or you will modify the 'get_nx_graph' function of 'utils.py' file. `get_sp_adj_mat` don't care the concrete header name, as long as the first 2 columns are node indices. If the original graph file has only 2 columns,  `get_sp_adj_mat` function will set edge weights as 1 in the 3rd column. If the original graph file has 3 columns, `get_sp_adj_mat` function will set edge weights as values the 3rd column.
+
+For typos, technical errors, or clarifications you would like to see added, please let me know and you are encouraged to make a pull request on this project.
 
 # Reference
 - [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902)

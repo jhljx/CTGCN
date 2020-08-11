@@ -367,7 +367,7 @@
       "export": true,
       "record_time": false,
       "hid_dim": 128,
-      "init_type": "gaussian",
+      "init_type": "one-hot",
       "std": 1e-4,
       "model_type": "EGCNH",
       "weight_decay": 5e-4,
