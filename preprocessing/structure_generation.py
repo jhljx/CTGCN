@@ -42,7 +42,7 @@ class StructureInfoGenerator:
         # print('max degree: ', max_degree)
         # core_list.append(max_core_num)
         # degree_list.append(max_degree)
-        # check_and_make_path(output_dir)
+        check_and_make_path(output_dir)
 
         format_str = get_format_str(max_core_num)
         for i in range(1, max_core_num + 1):
@@ -59,6 +59,8 @@ class StructureInfoGenerator:
         print("getting k-core sub-graphs for all timestamps...")
 
         f_list = os.listdir(self.origin_base_path)
+        f_list = sorted(f_list)
+
         length = len(f_list)
         if worker <= 0:
             core_list, degree_list = [], []

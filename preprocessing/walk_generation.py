@@ -44,6 +44,7 @@ class WalkGenerator:
     def get_walk_info_all_time(self, worker=-1, sep='\t', weighted=True):
         print("perform random walk for all file(s)...")
         f_list = os.listdir(self.origin_base_path)
+        f_list = sorted(f_list)
 
         if worker <= 0:
             for i, f_name in enumerate(f_list):
