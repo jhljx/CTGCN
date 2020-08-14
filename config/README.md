@@ -158,12 +158,28 @@ Here we introduce how to change different learning strategies.
 - Supervised learning for link prediction (`learning_type` = 'S-link')
 
 #### GCN parameters
+Original GCN parameters
+
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
 | dropout | float | dropout rate (range: \[0, 1\]) |
 | bias | bool | whether or not to enable bias for model layers |
 
 Note that here GCN has two graph convolution layers.
+
+#### GCN_TG parameters
+We also provide another GCN version which is implemented by pytorch_geometric library.
+
+Pytorch-Geometric GCN(GCN_TG) parameters
+
+| **Parameter** | **Type** | **Description** |
+|:----:|:----:| :----: | 
+| feature_pre | bool | whether or not to add a linear layer before all GCN layers |
+| feature_dim | int | output dimension of the added linear layer |
+| layer_num | int | GCN layer num |
+| dropout | float | dropout rate (range: \[0, 1\]) |
+| bias | bool | whether or not to enable bias for model layers |
+
 
 #### GAT parameters
 | **Parameter** | **Type** | **Description** |
@@ -175,7 +191,31 @@ Note that here GCN has two graph convolution layers.
 
 Note that here GAT has two graph attention layers, head_num=1, negative_slop=0.2.
 
-#### GraphSAGE parameters
+#### GAT_TG parameters
+We also provide another GAT version which is implemented by pytorch_geometric library.
+
+Pytorch-Geometric GAT(GAT_TG) parameters
+
+| **Parameter** | **Type** | **Description** |
+|:----:|:----:| :----: | 
+| feature_pre | bool | whether or not to add a linear layer before all GAT layers |
+| feature_dim | int | output dimension of the added linear layer |
+| layer_num | int | GAT layer num |
+| dropout | float | dropout rate (range: \[0, 1\]) |
+| bias | bool | whether or not to enable bias for model layers |
+
+
+
+#### SAGE parameters
+
+xxxx
+
+#### SAGE_TG parameters
+
+We also provide another SAGE version which is implemented by pytorch_geometric library.
+
+Pytorch-Geometric SAGE(SAGE_TG) parameters
+
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
 | feature_pre | bool | whether or not to add a linear layer before all SAGE layers |
@@ -187,6 +227,17 @@ Note that here GAT has two graph attention layers, head_num=1, negative_slop=0.2
 Note that here GraphSAGE uses some default parameters of 'tg.nn.SAGEConv', So the `pool` parameter is 'mean'.
 
 #### GIN parameters
+
+xxxx
+
+
+#### GIN_TG parameters
+
+We also provide another GIN version which is implemented by pytorch_geometric library.
+
+Pytorch-Geometric GIN(GIN_TG) parameters
+
+
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
 | feature_pre | bool | whether or not to add a linear layer before all GIN layers |

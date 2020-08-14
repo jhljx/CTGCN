@@ -289,7 +289,7 @@
       "thread_num": 30,
       "epoch": 50,
       "lr": 1e-3,
-      "batch_size": 4096,
+      "batch_size": 32768,
       "load_model": false,
       "shuffle": true,
       "export": true,
@@ -328,7 +328,7 @@
       "thread_num": 30,
       "epoch": 50,
       "lr": 1e-3,
-      "batch_size": 4096,
+      "batch_size": 32768,
       "load_model": false,
       "shuffle": true,
       "export": true,
@@ -730,10 +730,10 @@
     "do_lp": true,
     "generate": false,
     "aggregate": false,
-    "method_list": ["GIN", "CGCN-C", "CGCN-S", "GCRN"],
+    "method_list": ["EvolveGCN", "CTGCN-C", "CTGCN-S"],
     "c_list": [0.01, 0.1, 1, 10],
     "measure_list": ["Avg", "Had", "L1", "L2"],
     "max_iter": 10000,
-    "worker": 30
+    "worker": 3
   }
 }

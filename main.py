@@ -30,7 +30,7 @@ def parse_json_args(file_path):
 # CGCN-S and CTGCN-S don't use negative sampling loss, so preprocessing is unnecessary!
 def preprocessing_task(method, args):
     from preprocessing import preprocess
-    assert method in ['GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'CGCN-C', 'GCRN', 'EvolveGCN', 'CTGCN-C']
+    assert method in ['GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN', 'CGCN-C', 'GCRN', 'EvolveGCN', 'CTGCN-C']
     preprocess(method, args[method])
 
 

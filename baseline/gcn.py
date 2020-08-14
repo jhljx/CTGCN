@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch_geometric as tg
 
 # Graph Convolutional Network. For more information, please refer to https://arxiv.org/abs/1609.02907
-# We copy some code of GCN in https://github.com/tkipf/pygcn, and include this method in our graph embedding project framework.
+# We copy some code of GCN from https://github.com/tkipf/pygcn, and include this method in our graph embedding project framework.
 # # Author: jhljx
 # # Email: jhljx8918@gmail.com
 
@@ -48,7 +48,7 @@ class GraphConvolution(nn.Module):
                + str(self.output_dim) + ')'
 
 
-class SpGCN(nn.Module):
+class GCN(nn.Module):
     input_dim: int
     hidden_dim: int
     output_dim: int
@@ -59,7 +59,7 @@ class SpGCN(nn.Module):
     gc2: GraphConvolution
 
     def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.5, bias=True):
-        super(SpGCN, self).__init__()
+        super(GCN, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
@@ -90,7 +90,7 @@ class SpGCN(nn.Module):
         return x
 
 
-class GCN(torch.nn.Module):
+class GCN_TG(torch.nn.Module):
     input_dim: int
     feature_dim: int
     hidden_dim: int
@@ -102,7 +102,7 @@ class GCN(torch.nn.Module):
     method_name: str
 
     def __init__(self, input_dim, feature_dim, hidden_dim, output_dim, feature_pre=True, layer_num=2, dropout=0.5, bias=True, **kwargs):
-        super(GCN, self).__init__()
+        super(GCN_TG, self).__init__()
         self.input_dim = input_dim
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
@@ -111,7 +111,7 @@ class GCN(torch.nn.Module):
         self.layer_num = layer_num
         self.dropout = dropout
         self.bias = bias
-        self.method_name = 'GCN'
+        self.method_name = 'GCN_TG'
 
         if feature_pre:
             self.linear_pre = nn.Linear(input_dim, feature_dim, bias=bias)

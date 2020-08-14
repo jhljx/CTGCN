@@ -158,7 +158,7 @@ def separate(info='', sep='=', num=8):
 
 
 def get_static_gnn_methods():
-    gnn_list = ['GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'CGCN-C', 'CGCN-S']
+    gnn_list = ['GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN', 'CGCN-C', 'CGCN-S']
     return dict(zip(gnn_list, np.ones(len(gnn_list), dtype=np.int)))
 
 
@@ -173,10 +173,11 @@ def get_core_based_methods():
 
 
 def get_supported_gnn_methods():
-    gnn_list = ['GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
+    gnn_list = ['GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN', 'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
     return dict(zip(gnn_list, np.ones(len(gnn_list), dtype=np.int)))
 
 
 def get_supported_methods():
-    method_list = ['DynGEM', 'DynAE', 'DynRNN', 'DynAERNN', 'TIMERS', 'GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
+    method_list = ['DynGEM', 'DynAE', 'DynRNN', 'DynAERNN', 'TIMERS', 'GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN',
+                   'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
     return dict(zip(method_list, np.ones(len(method_list), dtype=np.int)))

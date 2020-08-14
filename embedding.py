@@ -149,6 +149,7 @@ class SupervisedEmbedding(BaseEmbedding):
             return idx_train, label_train, idx_val, label_val, idx_test, label_test
         # consider link prediction
         else:
+            assert edge_list
             timestamp_num = len(edge_list)
             device = edge_list[0].device
             idx_train, label_train, idx_val, label_val, idx_test, label_test = [], [], [], [], [], []
@@ -207,12 +208,12 @@ class SupervisedEmbedding(BaseEmbedding):
             embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
-        elif model.method_name in ['GCN', 'GAT', 'GIN', 'SAGE', 'GCRN']:
+        elif model.method_name in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'GCRN']:
             embedding_list = model(x_list, edge_list)
             embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
-        else:
+        else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
             embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
@@ -304,10 +305,10 @@ class UnsupervisedEmbedding(BaseEmbedding):
             dist_max_list, dist_argmax_list = preselect_anchor(self.node_num, node_dist_list, self.device)
             embedding_list = model(x_list, dist_max_list, dist_argmax_list)
             loss_input_list = [embedding_list, batch_indices]
-        elif model.method_name in ['GCN', 'GAT', 'SAGE', 'GIN', 'GCRN']:
+        elif model.method_name in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'GCRN']:
             embedding_list = model(x_list, edge_list)
             loss_input_list = [embedding_list, batch_indices]
-        else:
+        else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
             loss_input_list = [embedding_list, batch_indices]
         output_list = structure_list if model.method_name in ['CGCN-S', 'CTGCN-S'] else embedding_list

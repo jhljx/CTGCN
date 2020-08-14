@@ -47,15 +47,27 @@ https://pytorch-geometric.com/whl/. Note that in this project, the NVIDIA-SMI ve
 
 # Commands & Functions
 
-We provide a docker file to help you build a docker environment. The docker commands of creating CTGCN containers are:
+We provide a docker file to help you build a docker environment. To build a CTGCN nvidia docker image, you can run either command bellow.
+
+- Build from dockerfile
+
+      docker build -t jhljx/ctgcn:v1 .
+
+or
+
+- Pull from docker hub
+
+      docker pull jhljx/ctgcn:v1
+
+After building the docker image, the docker commands of creating CTGCN containers are:
 
 1. Creating a CTGCN CPU container
 
-       docker run -it -v /home/xxx/CTGCN:/project -v /home/xxx/CTGCN/data:/data --name=CTGCN --memory=180G --cpus=35 ctgcn/ctgcn:v1 /bin/bash
+       docker run -it -v /home/xxx/CTGCN:/project -v /home/xxx/CTGCN/data:/data --name=CTGCN --memory=180G --cpus=35 jhljx/ctgcn:v1 /bin/bash
 
 2. Creating a CTGCN GPU container
 
-       docker run -it -v /home/xxx/CTGCN:/project -v /home/xxx/CTGCN/data:/data --name=CTGCN_GPU --memory=180G --cpus=35 --runtime=nvidia ctgcn/ctgcn:v1 /bin/bash
+       docker run -it -v /home/xxx/CTGCN:/project -v /home/xxx/CTGCN/data:/data --name=CTGCN_GPU --memory=180G --cpus=35 --runtime=nvidia jhljx/ctgcn:v1 /bin/bash
 
 The above docker commands are only examples. If you want to run CTGCN codes in a docker environment, you need to modify the file path, memory capacity, cpu thread number and docker image name in the above commands.
 
@@ -85,7 +97,7 @@ This project has several functions, including: **preprocessing**, **graph embedd
 
 6. **Regular Equivalence Prediction**: perform regular equivalence prediction on several dynamic graph data sets to test the performance of graph embedding approaches. 
 
-       python3 main.py --config=config/america_air.json --task=equ_pred
+       python3 main.py --config=config/uci.json --task=equ_pred
 
 # Parameter Configurations
 

@@ -1,13 +1,13 @@
 {
   "embedding":
   {
-    "GCN":
+    "GCN_TG":
     {
       "base_path": "/data/uci",
       "origin_folder": "1.format",
-      "embed_folder": "2.embedding/GCN",
+      "embed_folder": "2.embedding/GCN_TG",
       "model_folder": "CTGCN/model",
-      "model_file": "gcn",
+      "model_file": "gcn_tg",
       "node_file": "nodes_set/nodes.csv",
       "file_sep": "\t",
       "start_idx": 0,
@@ -39,13 +39,13 @@
       "val_ratio": 0.3,
       "test_ratio": 0.2
     },
-    "GAT":
+    "GAT_TG":
     {
       "base_path": "/data/uci",
       "origin_folder": "1.format",
-      "embed_folder": "2.embedding/GAT",
+      "embed_folder": "2.embedding/GAT_TG",
       "model_folder": "CTGCN/model",
-      "model_file": "gat",
+      "model_file": "gat_tg",
       "node_file": "nodes_set/nodes.csv",
       "file_sep": "\t",
       "start_idx": 0,
@@ -77,13 +77,13 @@
       "val_ratio": 0.3,
       "test_ratio": 0.2
     },
-    "SAGE":
+    "SAGE_TG":
     {
       "base_path": "/data/uci",
       "origin_folder": "1.format",
-      "embed_folder": "2.embedding/SAGE",
+      "embed_folder": "2.embedding/SAGE_TG",
       "model_folder": "CTGCN/model",
-      "model_file": "sage",
+      "model_file": "sage_tg",
       "node_file": "nodes_set/nodes.csv",
       "file_sep": "\t",
       "start_idx": 0,
@@ -115,13 +115,13 @@
       "val_ratio": 0.3,
       "test_ratio": 0.2
     },
-    "GIN":
+    "GIN_TG":
     {
       "base_path": "/data/uci",
       "origin_folder": "1.format",
-      "embed_folder": "2.embedding/GIN",
+      "embed_folder": "2.embedding/GIN_TG",
       "model_folder": "CTGCN/model",
-      "model_file": "gin",
+      "model_file": "gin_tg",
       "node_file": "nodes_set/nodes.csv",
       "file_sep": "\t",
       "start_idx": 0,
@@ -706,7 +706,7 @@
       "node_freq_folder": "CTGCN/ctgcn_node_freq",
       "file_sep": "\t",
       "generate_core": true,
-      "run_walk": false,
+      "run_walk": true,
       "weighted": true,
       "walk_time": 20,
       "walk_length": 5,

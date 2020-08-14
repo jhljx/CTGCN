@@ -55,67 +55,43 @@ def get_input_data(method, idx, data_loader, args):
     if method in get_core_based_methods():  # CGCN-C, CGCN-S, CTGCN-C, CTGCN-S
         max_core = args['max_core']
         core_adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=duration, max_core=max_core)
-    if method in ['EvolveGCN']:  # normalization is quite important for the performance improvement of EvolveGCN
+    elif method in ['GCN', 'GAT']:
+        normalize, row_norm, add_eye = True, True, True
+    elif method == 'SAGE':
+        pass
+    elif method == 'GIN':
+        pass
+    elif method in ['EvolveGCN']:  # normalization is quite important for the performance improvement of EvolveGCN
         normalize, row_norm, add_eye = True, False, True
-    else:  # GCN, GAT, SAGE, GIN, PGNN, VGRNN
+    else:  # GCN_TG, GAT_TG, SAGE_TG, GIN_TG, PGNN, GCRN(use GCN_TG as its backbone), VGRNN
         normalize, row_norm, add_eye = False, False, True
     # print('normalize = ', normalize)
     adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, normalize=normalize, row_norm=row_norm, add_eye=add_eye, data_type='tensor')
-
-    # test
-    # adj_len = len(adj_list)
-    # for i in range(adj_len):
-    #     real_adj = adj_list[i]
-    #     core1_adj = core_adj_list[i][0]
-    #     real_indices = real_adj._indices()
-    #     # print('real indices: ', real_indices[:, :20])
-    #     real_values = real_adj._values()
-    #     core1_indices = core1_adj._indices()
-    #     core1_values = core1_adj._values()
-    #     print('core1 indices shape: ', core1_indices.shape[1], 'adj indices shape: ', real_indices.shape[1])
-    #     assert real_indices.shape[1] == core1_indices.shape[1]
-    #     assert real_values.shape[0] == core1_values.shape[0]
-    #     print('edge num: ', real_indices.shape[1])
-    #     real_edges = torch.cat((real_indices.transpose(0, 1).float(), real_values.unsqueeze(1)), dim=1)
-    #     core1_edges = torch.cat((core1_indices.transpose(0, 1).float(), core1_values.unsqueeze(1)), dim=1)
-    #     df_real = pd.DataFrame(real_edges.cpu().numpy(), columns=['from_id', 'to_id', 'weight'])
-    #     df_real = df_real.sort_values(by=['from_id', 'to_id'], axis=0).reset_index(drop=True)
-    #     # print(df_real[df_real.from_id == 0.0])
-    #     # print(df_real[df_real.from_id == 1.0])
-    #     df_core1 = pd.DataFrame(core1_edges.cpu().numpy(), columns=['from_id', 'to_id', 'weight'])
-    #     df_core1 = df_core1.sort_values(by=['from_id', 'to_id'], axis=0).reset_index(drop=True)
-    #     # print(df_core1[df_core1.from_id == 0.0])
-    #     # print(df_core1[df_core1.from_id == 1.0])
-    #     for j in range(df_real.shape[0]):
-    #         assert df_real.iloc[j, 0] == df_core1.iloc[j, 0]
-    #         assert df_real.iloc[j, 1] == df_core1.iloc[j, 1]
-    #         assert df_real.iloc[j, 2] == df_core1.iloc[j, 2]
-    # test
-    # prepare edge_list data, node_dist_list data
+    # all gnn methods need edge_list when learning_type='S-link'
     edge_list = [adj._indices() for adj in adj_list]  # edge_indices: [2, edge_num]
-    # for i, edges in enumerate(edge_list):
-    #     print('i = ', i, ', edges shape: ', edges.shape)
 
-    if method in ['EvolveGCN', 'CGCN-S', 'CTGCN-S'] and node_feature_path is None: # 'CGCN-S',
+    if method in get_core_based_methods():  # CGCN-C, CGCN-S, CTGCN-C, CTGCN-S
+        adj_list = core_adj_list
+    elif method in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'PGNN', 'GCRN']:  # VGRNN uses GAE architecture, so adj_list is needed!
+        adj_list = None
+
+    if method in ['EvolveGCN', 'CGCN-S', 'CTGCN-S'] and node_feature_path is None:
         init_type = args['init_type']
         std = args.get('std', 1e-4)
         x_list, input_dim = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, init_type=init_type, std=std)
         # print('input_dim: ', input_dim)
-    else:   # GCN, GAT, SAGE, GIN, PGNN, GCRN, VGRNN, CGCN-C, CTGCN-C
+    else:   # GCN, GCN_TG, GAT, GAT_TG, SAGE, SAGE_TG, GIN, GIN_TG, PGNN, GCRN, VGRNN, CGCN-C, CTGCN-C
         x_list, input_dim = data_loader.get_feature_list(node_feature_path, start_idx=idx, duration=duration, shuffle=False)
         if method == 'VGRNN':
             x_list = torch.stack(x_list)
+
     node_dist_list = None
-    if method in get_core_based_methods():
-        adj_list = core_adj_list
-    elif method in ['GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'GCRN', 'VGRNN']:
-        if method in ['GCN', 'GAT', 'GIN', 'SAGE', 'PGNN', 'GCRN']:
-            adj_list = None
-        if method == 'PGNN':
-            from baseline.pgnn import precompute_dist_data
-            node_num = args['node_num']  # not hyper-parameter
-            approximate = args['approximate']
-            node_dist_list = precompute_dist_data(edge_list, node_num, approximate=approximate)
+    if method == 'PGNN':
+        from baseline.pgnn import precompute_dist_data
+        node_num = args['node_num']  # not hyper-parameter
+        approximate = args['approximate']
+        node_dist_list = precompute_dist_data(edge_list, node_num, approximate=approximate)
+
     # print('input_dim: ', input_dim, ', adj_list:', adj_list, ', x_list: ', x_list[0].shape, ', edge_list: ', edge_list[0].shape, ', node dist list: ', node_dist_list)
     return input_dim, adj_list, x_list, edge_list, node_dist_list
 
@@ -123,10 +99,10 @@ def get_input_data(method, idx, data_loader, args):
 def get_gnn_model(method, args):
     assert method in get_supported_gnn_methods()
 
-    from baseline.gcn import GCN
-    from baseline.gat import GAT
-    from baseline.sage import SAGE
-    from baseline.gin import GIN
+    from baseline.gcn import GCN, GCN_TG
+    from baseline.gat import GAT, GAT_TG
+    from baseline.sage import SAGE, SAGE_TG
+    from baseline.gin import GIN, GIN_TG
     from baseline.pgnn import PGNN
     from baseline.gcrn import GCRN
     from baseline.egcn import EvolveGCN
@@ -140,24 +116,27 @@ def get_gnn_model(method, args):
     bias = args.get('bias', None)
     duration = args.get('duration', None)
 
-    # if method == 'GCN':
-    #    print('YES')
-    #    return GCN(input_dim, hidden_dim, embed_dim, dropout=dropout, bias=bias)
-    #if method == 'GAT':
-    #    alpha, head_num = args['alpha'], args['head_num']
-    #    return GAT(input_dim, hidden_dim, embed_dim, dropout=dropout, alpha=alpha, head_num=head_num)
-    if method in ['GCN', 'GAT', 'SAGE', 'GIN', 'PGNN', 'GCRN']:
+    if method == 'GCN':
+        return GCN(input_dim, hidden_dim, embed_dim, dropout=dropout, bias=bias)
+    elif method == 'GAT':
+        alpha, head_num = args['alpha'], args['head_num']
+        return GAT(input_dim, hidden_dim, embed_dim, dropout=dropout, alpha=alpha, head_num=head_num)
+    elif method == "SAGE":
+        return SAGE()
+    elif method == 'GIN':
+        return GIN()
+    elif method in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'PGNN', 'GCRN']:
         feature_pre = args['feature_pre']
         feature_dim = args['feature_dim']
         layer_num = args['layer_num']
-        if method == 'GCN':
-            return GCN(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
-        if method == 'GAT':
-            return GAT(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
-        elif method == 'SAGE':
-            return SAGE(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
-        elif method == 'GIN':
-            return GIN(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
+        if method == 'GCN_TG':
+            return GCN_TG(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
+        elif method == 'GAT_TG':
+            return GAT_TG(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
+        elif method == 'SAGE_TG':
+            return SAGE_TG(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
+        elif method == 'GIN_TG':
+            return GIN_TG(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
         elif method == 'PGNN':
             return PGNN(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias)
         elif method == 'GCRN':
@@ -192,10 +171,6 @@ def get_loss(method, idx, data_loader, args):
     base_path = args['base_path']
     file_sep = args['file_sep']
     duration = args['duration']
-
-    # start_idx = max(idx - duration + 1, args['start_idx'])
-    # time_duration = idx - start_idx + 1
-    # print('start idx: ', start_idx, ', time duration: ', time_duration)
 
     if learning_type == 'U-neg':
         walk_pair_folder = args['walk_pair_folder']
