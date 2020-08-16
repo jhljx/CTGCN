@@ -96,6 +96,8 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     return torch.sparse.FloatTensor(indices, values, shape)
 
 
+
+
 # Transform a sparse matrix into a tuple
 def sparse_to_tuple(sparse_mx):
     if not sp.isspmatrix_coo(sparse_mx):
@@ -158,7 +160,7 @@ def separate(info='', sep='=', num=8):
 
 
 def get_static_gnn_methods():
-    gnn_list = ['GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN', 'CGCN-C', 'CGCN-S']
+    gnn_list = ['GCN', 'TgGCN', 'GAT', 'TgGAT', 'SAGE', 'TgSAGE', 'GIN', 'TgGIN', 'PGNN', 'CGCN-C', 'CGCN-S']
     return dict(zip(gnn_list, np.ones(len(gnn_list), dtype=np.int)))
 
 
@@ -173,11 +175,11 @@ def get_core_based_methods():
 
 
 def get_supported_gnn_methods():
-    gnn_list = ['GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN', 'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
+    gnn_list = ['GCN', 'TgGCN', 'GAT', 'TgGAT', 'SAGE', 'TgSAGE', 'GIN', 'TgGIN', 'PGNN', 'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
     return dict(zip(gnn_list, np.ones(len(gnn_list), dtype=np.int)))
 
 
 def get_supported_methods():
-    method_list = ['DynGEM', 'DynAE', 'DynRNN', 'DynAERNN', 'TIMERS', 'GCN', 'GCN_TG', 'GAT', 'GAT_TG', 'SAGE', 'SAGE_TG', 'GIN', 'GIN_TG', 'PGNN',
+    method_list = ['DynGEM', 'DynAE', 'DynRNN', 'DynAERNN', 'TIMERS', 'GCN', 'TgGCN', 'GAT', 'TgGAT', 'SAGE', 'TgSAGE', 'GIN', 'TgGIN', 'PGNN',
                    'CGCN-C', 'CGCN-S', 'GCRN', 'EvolveGCN', 'VGRNN', 'CTGCN-C', 'CTGCN-S']
     return dict(zip(method_list, np.ones(len(method_list), dtype=np.int)))

@@ -58,57 +58,44 @@ class CoreDiffusion(nn.Module):
         return output
 
 
-# Multi-Layer Perceptron(MLP) 'layer'
+# Multi-Layer Perceptron(MLP) layer
 class MLP(nn.Module):
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, bias=True, activate_type='N'):
-        '''
-            num_layers: number of layers in the neural networks (EXCLUDING the input layer). If num_layers=1, this reduces to linear model.
-            input_dim: dimensionality of input features
-            hidden_dim: dimensionality of hidden units at ALL layers
-            output_dim: number of classes for prediction
-            device: which device to use
-        '''
+    input_dim: int
+    hidden_dim: int
+    output_dim: int
+    layer_num: int
+    bias: bool
+    activate_type: str
 
+    def __init__(self, input_dim, hidden_dim, output_dim, layer_num, bias=True, activate_type='N'):
         super(MLP, self).__init__()
-
-        self.linear_or_not = True  # default is linear model
-        self.num_layers = num_layers
+        self.input_dim = input_dim
+        self.hidden_dim = hidden_dim
+        self.output_dim = output_dim
+        self.layer_num = layer_num
+        self.bias = bias
         self.activate_type = activate_type
         assert self.activate_type in ['L', 'N']
+        assert self.layer_num > 0
 
-        if num_layers < 1:
-            raise ValueError("number of layers should be positive!")
-        elif num_layers == 1:
-            # Linear model
+        if layer_num == 1:
             self.linear = nn.Linear(input_dim, output_dim, bias=bias)
         else:
-            # Multi-layer model
-            self.linear_or_not = False
             self.linears = torch.nn.ModuleList()
-            # self.batch_norms = torch.nn.ModuleList()
-
             self.linears.append(nn.Linear(input_dim, hidden_dim, bias=bias))
-            for layer in range(num_layers - 2):
+            for layer in range(layer_num - 2):
                 self.linears.append(nn.Linear(hidden_dim, hidden_dim, bias=bias))
             self.linears.append(nn.Linear(hidden_dim, output_dim, bias=bias))
 
-            #for layer in range(num_layers - 1):
-            #     self.batch_norms.append(nn.BatchNorm1d((hidden_dim)))
-
     def forward(self, x):
-        if self.linear_or_not:
-            # If linear model
+        if self.layer_num == 1:  # Linear model
             x = self.linear(x)
-            if self.activate_type == 'L':
-                return x
-            else:  # activate_type == 'N'
-                return F.selu(x)
-        else:
-            # If MLP
-            h = x
-            for layer in range(self.num_layers):
-                if self.activate_type == 'L':
-                    h = self.linears[layer](h)
-                else:
-                    h = F.selu(self.linears[layer](h))
-            return h
+            if self.activate_type == 'N':
+                x = F.selu(x)
+            return x
+        h = x  # MLP
+        for layer in range(self.num_layers):
+            h = self.linears[layer](h)
+            if self.activate_type == 'N':
+                h = F.selu(h)
+        return h

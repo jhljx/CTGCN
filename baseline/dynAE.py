@@ -382,6 +382,8 @@ def dyngem_embedding(method, args):
     node_list = nodes_set['node'].tolist()
     data_loader = DataLoader(node_list, max_time_num, has_cuda=has_cuda)
 
+    if start_idx < 0:
+        start_idx = max_time_num + start_idx
     if end_idx < 0:  # original time range is [start_idx, end_idx] containing start_idx and end_idx
         end_idx = max_time_num + end_idx + 1
 

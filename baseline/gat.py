@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import torch_geometric as tg
 
 # Graph Attention Networks. For more information, please refer to https://arxiv.org/abs/1710.10903
-# We copy some code of GAT from https://github.com/Diego999/pyGAT, and include this method in our graph embedding project framework.
+# We copy and modify GAT code from https://github.com/Diego999/pyGAT, and include this method in our graph embedding project framework.
 # # Author: jhljx
 # # Email: jhljx8918@gmail.com
 
@@ -61,8 +61,8 @@ class SpGraphAttentionLayer(nn.Module):
         self.leakyrelu = nn.LeakyReLU(self.alpha)
         self.special_spmm = SpecialSpmm()
 
-    # edge_index: [2, edge_num]
-    def forward(self, input, edge_index):
+
+    def forward(self, input, adj):
         # dv = 'cuda' if input.is_cuda else 'cpu'
         N = input.size()[0]
         # adj = adj.tocsc()
@@ -75,6 +75,7 @@ class SpGraphAttentionLayer(nn.Module):
         # h: N x out
         assert not torch.isnan(h).any()
         # Self-attention on the nodes - Shared attention mechanism
+        edge_index = adj._indices()  # [2, edge_num]
         edge_h = torch.cat((h[edge_index[0, :], :], h[edge_index[1, :], :]), dim=1).t()
         # edge: 2*D x E
 
@@ -107,6 +108,7 @@ class SpGraphAttentionLayer(nn.Module):
         return self.__class__.__name__ + ' (' + str(self.in_features) + ' -> ' + str(self.out_features) + ')'
 
 
+# Original version of GAT
 class GAT(nn.Module):
     input_dim: int
     hidden_dim: int
@@ -133,25 +135,26 @@ class GAT(nn.Module):
 
         self.out_att = SpGraphAttentionLayer(hidden_dim * head_num, output_dim, dropout=dropout, alpha=alpha, concat=False)
 
-    def forward(self, x, edge_index):
+    def forward(self, x, adj):
         if isinstance(x, list):
             timestamp_num = len(x)
             output_list = []
             for i in range(timestamp_num):
-                output_list.append(self.gat(x[i], edge_index[i]))
+                output_list.append(self.gat(x[i], adj[i]))
             return output_list
-        return self.gat(x, edge_index)
+        return self.gat(x, adj)
 
-    def gat(self, x, edge_index):
+    def gat(self, x, adj):
         if x.layout != torch.sparse_coo:
             x = F.dropout(x, self.dropout, training=self.training)
-        x = torch.cat([att(x, edge_index) for att in self.attentions], dim=1)
+        x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
         x = F.dropout(x, self.dropout, training=self.training)
-        x = F.elu(self.out_att(x, edge_index))
+        x = F.elu(self.out_att(x, adj))
         return F.log_softmax(x, dim=1)
 
 
-class GAT_TG(torch.nn.Module):
+# Pytorch-Geometric version of GAT
+class TgGAT(torch.nn.Module):
     input_dim: int
     feature_dim: int
     hidden_dim: int
@@ -163,7 +166,7 @@ class GAT_TG(torch.nn.Module):
     method_name: str
 
     def __init__(self, input_dim, feature_dim, hidden_dim, output_dim, feature_pre=True, layer_num=2, dropout=0.5, bias=True, **kwargs):
-        super(GAT_TG, self).__init__()
+        super(TgGAT, self).__init__()
         self.input_dim = input_dim
         self.feature_dim = feature_dim
         self.hidden_dim = hidden_dim
@@ -172,7 +175,7 @@ class GAT_TG(torch.nn.Module):
         self.layer_num = layer_num
         self.dropout = dropout
         self.bias = bias
-        self.method_name = 'GAT_TG'
+        self.method_name = 'TgGAT'
 
         if feature_pre:
             self.linear_pre = nn.Linear(input_dim, feature_dim, bias=bias)

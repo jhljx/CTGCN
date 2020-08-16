@@ -107,9 +107,6 @@ class InnerProduct(nn.Module):
         edge_index = edge_index.transpose(0, 1)  # [edge_num, 2]
         embedding_i = x[edge_index[:, 0]]
         embedding_j = x[edge_index[:, 1]]
-        # print('embedding i shape: ', embedding_i.shape)
-        # print('embedding i max: ', embedding_i.max(), 'min: ', embedding_i.min())
-        # print('embedding j max: ', embedding_j.max(), 'min: ', embedding_j.min())
         if self.reduce:
             return torch.sum(embedding_i * embedding_j, dim=1)
         return embedding_i * embedding_j

@@ -167,10 +167,10 @@ Original GCN parameters
 
 Note that here GCN has two graph convolution layers.
 
-#### GCN_TG parameters
+#### TgGCN parameters
 We also provide another GCN version which is implemented by pytorch_geometric library.
 
-Pytorch-Geometric GCN(GCN_TG) parameters
+Pytorch-Geometric GCN(TgGCN) parameters
 
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
@@ -191,10 +191,10 @@ Pytorch-Geometric GCN(GCN_TG) parameters
 
 Note that here GAT has two graph attention layers, head_num=1, negative_slop=0.2.
 
-#### GAT_TG parameters
+#### TgGAT parameters
 We also provide another GAT version which is implemented by pytorch_geometric library.
 
-Pytorch-Geometric GAT(GAT_TG) parameters
+Pytorch-Geometric GAT(TgGAT) parameters
 
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
@@ -204,17 +204,23 @@ Pytorch-Geometric GAT(GAT_TG) parameters
 | dropout | float | dropout rate (range: \[0, 1\]) |
 | bias | bool | whether or not to enable bias for model layers |
 
-
+Note that here GAT uses some default parameters of 'tg.nn.GATConv', So the `heads` parameter is 1, `negative_slope` parameter is 0.2.
 
 #### SAGE parameters
 
-xxxx
+| **Parameter** | **Type** | **Description** |
+|:----:|:----:| :----: | 
+| num_sample | int | the number of sampled neighborhood for all nodes <br> (value: can be null or positive number) |
+| pooling_type | str | neighborhood aggregation type <br> (value: 'sum', 'average', 'max') |
+| dropout | float | dropout rate (range: \[0, 1\]) |
+| bias | bool | whether or not to enable bias for model layers |
 
-#### SAGE_TG parameters
+
+#### TgSAGE parameters
 
 We also provide another SAGE version which is implemented by pytorch_geometric library.
 
-Pytorch-Geometric SAGE(SAGE_TG) parameters
+Pytorch-Geometric SAGE(TgSAGE) parameters
 
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
@@ -228,14 +234,21 @@ Note that here GraphSAGE uses some default parameters of 'tg.nn.SAGEConv', So th
 
 #### GIN parameters
 
-xxxx
+| **Parameter** | **Type** | **Description** |
+|:----:|:----:| :----: | 
+| layer_num | int | GIN layer num |
+| mlp_layer_num | int | layer num in each MLP |
+| learn_eps | bool | whether to learn epsilon to distinguish center nodes from neighboring nodes or not |
+| pooling_type | str | neighbor aggregation type <br> (value: 'sum', 'average', 'max') |
+| dropout | float | dropout rate (range: \[0, 1\]) |
+| bias | bool | whether or not to enable bias for model layers |
 
 
-#### GIN_TG parameters
+#### TgGIN parameters
 
 We also provide another GIN version which is implemented by pytorch_geometric library.
 
-Pytorch-Geometric GIN(GIN_TG) parameters
+Pytorch-Geometric GIN(TgGIN) parameters
 
 
 | **Parameter** | **Type** | **Description** |

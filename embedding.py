@@ -153,11 +153,17 @@ class SupervisedEmbedding(BaseEmbedding):
             timestamp_num = len(edge_list)
             device = edge_list[0].device
             idx_train, label_train, idx_val, label_val, idx_test, label_test = [], [], [], [], [], []
+            # train_edges, val_edges, test_edges start from 1 to timestamp_num - 1
+            # embedding start from [0, -1], then embedding in previous timestamp can predict the current edge label
             for i in range(1, timestamp_num):
                 assert edge_list[i].shape[0] == 2
                 all_edge_num = edge_list[i].shape[1]
                 all_edges = edge_list[i].transpose(0, 1).tolist()
                 all_edge_dict = dict(zip(map(lambda x: tuple(x), all_edges), np.ones(all_edge_num).astype(np.int)))
+                # remove self-loops
+                for nid in range(self.node_num):
+                    if (nid, nid) in all_edge_dict:
+                        all_edge_dict.pop((nid, nid))
                 all_edges = np.array(all_edges)
                 np.random.shuffle(all_edges)
 
@@ -184,19 +190,18 @@ class SupervisedEmbedding(BaseEmbedding):
                 label_train.append(train_labels)
                 label_val.append(val_labels)
                 label_test.append(test_labels)
-            del edge_list
             return idx_train, label_train, idx_val, label_val, idx_test, label_test
 
     def get_model_res(self, learning_type, adj_list, x_list, edge_list, node_dist_list, batch_indices, model, classifier, hx=None):
         structure_list = None
         if model.method_name in ['CGCN-S', 'CTGCN-S']:
             embedding_list, structure_list = model(x_list, adj_list)
-            embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = [cls_list, embedding_list, structure_list]
         elif model.method_name == 'VGRNN':
             embedding_list, _, loss_data_list = model(x_list, edge_list, hx)
-            embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = loss_data_list
             loss_input_list.append(adj_list)
@@ -205,17 +210,17 @@ class SupervisedEmbedding(BaseEmbedding):
             from baseline.pgnn import preselect_anchor
             dist_max_list, dist_argmax_list = preselect_anchor(self.node_num, node_dist_list, self.device)
             embedding_list = model(x_list, dist_max_list, dist_argmax_list)
-            embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
-        elif model.method_name in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'GCRN']:
+        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
             embedding_list = model(x_list, edge_list)
-            embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
         else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
-            embedding_list = embedding_list[1:] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
         output_list = structure_list if model.method_name in ['CGCN-S', 'CTGCN-S'] else embedding_list
@@ -232,8 +237,9 @@ class SupervisedEmbedding(BaseEmbedding):
         self.clear_cache()
         # time.sleep(100)
         best_acc, best_hx = 0, None
-        print('start training!')
+        print('start supervised training!')
         st = time.time()
+        model.train()
         for i in range(epoch):
             hx = None  # used for VGRNN
             t1 = time.time()
@@ -259,7 +265,7 @@ class SupervisedEmbedding(BaseEmbedding):
                     if classifier_file:
                         torch.save(classifier.state_dict(), os.path.join(self.model_base_path, classifier_file))
             self.clear_cache()
-        print('finish training!')
+        print('finish supervised training!')
 
         # load embedding model and classifier model
         if model_file:
@@ -273,7 +279,7 @@ class SupervisedEmbedding(BaseEmbedding):
         loss_input_list, output_list, _ = self.get_model_res(learning_type, adj_list, x_list, edge_list, node_dist_list, idx_test, model, classifier, best_hx)
         loss_test, acc_test, auc_test = loss_model(loss_input_list, label_test)
         print('Test set results:', 'loss= {:.4f}'.format(loss_test.item()), 'accuracy= {:.4f}'.format(acc_test.item()), 'auc= {:.4f}'.format(auc_test.item()))
-        print('finish evaluation!')
+        print('finish model evaluation!')
         en = time.time()
         cost_time = en - st
 
@@ -305,7 +311,7 @@ class UnsupervisedEmbedding(BaseEmbedding):
             dist_max_list, dist_argmax_list = preselect_anchor(self.node_num, node_dist_list, self.device)
             embedding_list = model(x_list, dist_max_list, dist_argmax_list)
             loss_input_list = [embedding_list, batch_indices]
-        elif model.method_name in ['GCN_TG', 'GAT_TG', 'SAGE_TG', 'GIN_TG', 'GCRN']:
+        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
             embedding_list = model(x_list, edge_list)
             loss_input_list = [embedding_list, batch_indices]
         else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
@@ -329,7 +335,8 @@ class UnsupervisedEmbedding(BaseEmbedding):
         output_list = []
 
         st = time.time()
-        print('start training!')
+        print('start unsupervised training!')
+        model.train()
         for i in range(epoch):
             node_indices = all_nodes[torch.randperm(self.node_num)] if shuffle else all_nodes  # Tensor
             hx = None  # used for VGRNN
@@ -346,7 +353,7 @@ class UnsupervisedEmbedding(BaseEmbedding):
                 t2 = time.time()
                 self.clear_cache()
                 print('epoch', i + 1, ', batch num = ', j + 1, ', loss:', loss.item(), ', cost time: ', t2 - t1, ' seconds!')
-        print('end training!')
+        print('end unsupervised training!')
         en = time.time()
         cost_time = en - st
 

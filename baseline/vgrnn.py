@@ -14,7 +14,7 @@ import inspect
 
 
 # Variational Graph Recurrent Networks. For more information, please refer to https://arxiv.org/abs/1908.09710
-# We modify and simplify the code of VGRNN in https://github.com/VGraphRNN/VGRNN, and include this method in our graph embedding project framework.
+# We modify and simplify the code of VGRNN from https://github.com/VGraphRNN/VGRNN, and include this method in our graph embedding project framework.
 # Author: jhljx
 # Email: jhljx8918@gmail.com
 
@@ -411,6 +411,7 @@ class InnerProductDecoder(nn.Module):
         x = torch.transpose(inp, dim0=0, dim1=1)
         x = torch.mm(inp, x)
         return self.act(x)
+
 
 # VGRNN model
 class VGRNN(nn.Module):

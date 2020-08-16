@@ -10,7 +10,7 @@ import torch.nn.functional as F
 from torch.nn import init
 
 # Position-aware Graph Neural Networks. For more information, please refer to https://arxiv.org/abs/1906.04817
-# We modify and simplify the code of PGNN in https://github.com/JiaxuanYou/P-GNN, and include this method in our graph embedding project framework.
+# We modify and simplify the code of PGNN from https://github.com/JiaxuanYou/P-GNN, and include this method in our graph embedding project framework.
 # Author: jhljx
 # Email: jhljx8918@gmail.com
 

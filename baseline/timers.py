@@ -326,7 +326,6 @@ def timers(nodes_file, input_base_path, output_base_path, Theta=0.17, dim=128, s
     # base graph adj list
     f_list = sorted(os.listdir(input_base_path))
     f0 = os.path.join(input_base_path, f_list[0])
-    print(f0)
     A = get_sp_adj_mat(f0, node2idx_dict, sep=sep)
 
     # begin TIMERS
