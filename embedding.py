@@ -147,15 +147,19 @@ class SupervisedEmbedding(BaseEmbedding):
                 idx_test.append(all_edges[test_indices, :2].transpose(0, 1))
                 label_test.append(edge_labels[test_indices, 2])
             return idx_train, label_train, idx_val, label_val, idx_test, label_test
-        # consider link prediction
+        # consider link prediction(static or dynamic)
         else:
             assert edge_list
             timestamp_num = len(edge_list)
             device = edge_list[0].device
             idx_train, label_train, idx_val, label_val, idx_test, label_test = [], [], [], [], [], []
-            # train_edges, val_edges, test_edges start from 1 to timestamp_num - 1
-            # embedding start from [0, -1], then embedding in previous timestamp can predict the current edge label
-            for i in range(1, timestamp_num):
+            # For dynamic link prediction training, train_edges, val_edges, test_edges start from 1 to timestamp_num - 1
+            # For dynamic link prediction training, embedding start from [0, -1], then embedding in previous timestamp can predict the current edge label
+            if learning_type == 'S-link-dy':
+                start_idx = 1
+            else:  # learning_type == 'S-link-st'
+                start_idx = 0
+            for i in range(start_idx, timestamp_num):
                 assert edge_list[i].shape[0] == 2
                 all_edge_num = edge_list[i].shape[1]
                 all_edges = edge_list[i].transpose(0, 1).tolist()
@@ -196,12 +200,12 @@ class SupervisedEmbedding(BaseEmbedding):
         structure_list = None
         if model.method_name in ['CGCN-S', 'CTGCN-S']:
             embedding_list, structure_list = model(x_list, adj_list)
-            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = [cls_list, embedding_list, structure_list]
         elif model.method_name == 'VGRNN':
             embedding_list, _, loss_data_list = model(x_list, edge_list, hx)
-            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = loss_data_list
             loss_input_list.append(adj_list)
@@ -210,17 +214,17 @@ class SupervisedEmbedding(BaseEmbedding):
             from baseline.pgnn import preselect_anchor
             dist_max_list, dist_argmax_list = preselect_anchor(self.node_num, node_dist_list, self.device)
             embedding_list = model(x_list, dist_max_list, dist_argmax_list)
-            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
         elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
             embedding_list = model(x_list, edge_list)
-            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
         else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
-            embedding_list = embedding_list[:-1] if learning_type == 'S-link' else embedding_list
+            embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
         output_list = structure_list if model.method_name in ['CGCN-S', 'CTGCN-S'] else embedding_list

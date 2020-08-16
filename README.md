@@ -105,7 +105,17 @@ This project has several functions, including: **preprocessing**, **graph embedd
 
 # Parameter Configurations
 
-All other configuration parameters are saved in configuration files. For more detailed configuration information, please refer to [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config).
+All other configuration parameters are saved in configuration files. For more detailed configuration information. We provide detailed parameter configuration tutorials, please refer to [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config). 
+
+We also provide different training strategies for gnn methods. The training strategies include:
+
+- Unsupervised learning with negative sampling loss (`learning_type` = 'U-neg')
+- Unsupervised learning with its own loss (`learning_type` = 'U-own')
+- Supervised learning for node classification (`learning_type` = 'S-node')
+- Supervised learning for edge classification (`learning_type` = 'S-edge')
+- Supervised learning for static(or dynamic) link prediction (`learning_type` = 'S-link-st' or 'S-link-dy')
+
+The detailed introduction of training strategies can also be found in [config/README.md](https://github.com/jhljx/CTGCN/tree/master/config).
 
 # Supported Graph Embedding Methods
 

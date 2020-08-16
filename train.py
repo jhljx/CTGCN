@@ -112,7 +112,8 @@ def get_gnn_model(method, args):
     elif method == 'GAT':
         alpha = args['alpha']
         head_num = args['head_num']
-        return GAT(input_dim, hidden_dim, embed_dim, dropout=dropout, alpha=alpha, head_num=head_num)
+        learning_type = args['learning_type']
+        return GAT(input_dim, hidden_dim, embed_dim, dropout=dropout, alpha=alpha, head_num=head_num, learning_type=learning_type)
     elif method == "SAGE":
         num_sample = args['num_sample']
         pooling_type = args['pooling_type']
@@ -165,7 +166,7 @@ def get_gnn_model(method, args):
 
 def get_loss(method, idx, data_loader, args):
     learning_type = args['learning_type']
-    assert learning_type in ['U-neg', 'U-own', 'S-node', 'S-edge', 'S-link']
+    assert learning_type in ['U-neg', 'U-own', 'S-node', 'S-edge', 'S-link-st', 'S-link-dy']
     base_path = args['base_path']
     file_sep = args['file_sep']
     duration = args['duration']
@@ -190,7 +191,7 @@ def get_loss(method, idx, data_loader, args):
         else:
             raise NotImplementedError('No implementation of ' + method + '\'s unsupervised learning loss!')
         return loss
-    else:   # supervised learning_type ['S-node', 'S-edge', 'S-link']:
+    else:   # supervised learning_type ['S-node', 'S-edge', 'S-link-st', 'S-link-dy']:
         embed_dim = args['embed_dim']
         cls_hidden_dim = args.get('cls_hid_dim', None)
         cls_layer_num = args.get('cls_layer_num', None)
@@ -208,7 +209,7 @@ def get_loss(method, idx, data_loader, args):
             elabel_base_path = os.path.abspath(os.path.join(base_path, elabel_folder))
             edge_label_list, output_dim = data_loader.get_edge_label_list(elabel_base_path, start_idx=idx, duration=duration, sep=file_sep)
             classifier = EdgeClassifier(embed_dim, cls_hidden_dim, output_dim, layer_num=cls_layer_num, duration=duration, bias=cls_bias, activate_type=cls_activate_type)
-        else:  # S-link
+        else:  # S-link-st, S-link-dy
             classifier = InnerProduct()
             output_dim = 2  # postive link & negative link
         # loss
@@ -256,7 +257,7 @@ def gnn_embedding(method, args):
     if end_idx < 0:  # original time range is [start_idx, end_idx] containing start_idx and end_idx
         end_idx = max_time_num + end_idx + 1
     step = duration
-    if learning_type == 'S-link':
+    if learning_type == 'S-link-dy':
         assert duration >= 2 and end_idx - start_idx >= 1
         end_idx = end_idx - 1
         step = duration - 1  # -1 is to make step and end_idx adapt to the dynamic link prediction setting

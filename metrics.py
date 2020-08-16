@@ -198,6 +198,7 @@ class ClassificationLoss(nn.Module):
                 assert preds.shape[1] == self.n_class
                 loss_val = ce_loss(preds, labels)
                 auc_val = roc_auc_score(label_binarize(labels.cpu().detach().numpy(), np.arange(self.n_class)), torch.softmax(preds, dim=1).cpu().detach().numpy())
+
             acc_val = accuracy(preds, labels)
             total_loss = total_loss + loss_val
             total_acc = total_acc + acc_val

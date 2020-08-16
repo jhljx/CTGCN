@@ -3,7 +3,6 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.autograd import Variable
 
 
 # K-core subgraph based diffusion layer
@@ -26,13 +25,10 @@ class CoreDiffusion(nn.Module):
         # self.att_weight = nn.Parameter(torch.FloatTensor(core_num))
         assert self.rnn_type in ['LSTM', 'GRU']
         if self.rnn_type == 'LSTM':
-            # self.lstm = LSTMCell(input_dim, output_dim, bias=bias)
             self.rnn = nn.LSTM(input_size=input_dim, hidden_size=output_dim, num_layers=1, bias=bias, batch_first=True)
         else:
-            # self.gru = GRUCell(input_dim, output_dim, bias=bias)
             self.rnn = nn.GRU(input_size=input_dim, hidden_size=output_dim, num_layers=1, bias=bias, batch_first=True)
         self.norm = nn.LayerNorm(output_dim)
-        # self.norm = nn.BatchNorm1d(output_dim)
         # self.reset_parameters()
 
     # def reset_parameters(self):
@@ -94,7 +90,7 @@ class MLP(nn.Module):
                 x = F.selu(x)
             return x
         h = x  # MLP
-        for layer in range(self.num_layers):
+        for layer in range(self.layer_num):
             h = self.linears[layer](h)
             if self.activate_type == 'N':
                 h = F.selu(h)

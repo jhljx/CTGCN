@@ -118,7 +118,7 @@ class GAT(nn.Module):
     head_num: int
     method_name: str
 
-    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.6, alpha=0.2, head_num=8):
+    def __init__(self, input_dim, hidden_dim, output_dim, dropout=0.6, alpha=0.2, head_num=8, learning_type='U-neg'):
         """Sparse version of GAT."""
         super(GAT, self).__init__()
         self.input_dim = input_dim
@@ -127,6 +127,8 @@ class GAT(nn.Module):
         self.dropout = dropout
         self.alpha = alpha
         self.head_num = head_num
+        assert learning_type in ['U-neg', 'S-node', 'S-edge', 'S-link-st', 'S-link-dy']
+        self.learning_type = learning_type
         self.method_name = 'GAT'
 
         self.attentions = [SpGraphAttentionLayer(input_dim, hidden_dim, dropout=dropout, alpha=alpha, concat=True) for _ in range(head_num)]
@@ -150,7 +152,9 @@ class GAT(nn.Module):
         x = torch.cat([att(x, adj) for att in self.attentions], dim=1)
         x = F.dropout(x, self.dropout, training=self.training)
         x = F.elu(self.out_att(x, adj))
-        return F.log_softmax(x, dim=1)
+        if self.learning_type == 'U-neg':
+            return F.log_softmax(x, dim=1)
+        return x
 
 
 # Pytorch-Geometric version of GAT

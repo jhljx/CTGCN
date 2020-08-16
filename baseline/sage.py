@@ -53,7 +53,7 @@ class Aggregator(nn.Module):
                 all_node_list += samp_neigh
             unique_nodes_list = np.unique(np.array(all_node_list))
             unique_node_num = len(unique_nodes_list)
-            unique_nodes_dict = dict(zip(unique_nodes_list, np.array(unique_node_num)))
+            unique_nodes_dict = dict(zip(unique_nodes_list, np.arange(unique_node_num)))
 
             mask = torch.zeros(sample_num, unique_node_num)
             column_indices = [unique_nodes_dict[nid] for samp_neigh in samp_neighs for nid in samp_neigh]

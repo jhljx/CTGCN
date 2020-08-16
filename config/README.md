@@ -119,7 +119,7 @@ Here we provide input parameters of all supported GNN methods.
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
 | nfeature_folder | str | node feature folder path relative to `base_path` <br> (**optional**, value: can be null) |
-| learning_type | str | learning type of gnns <br> (value: 'U-neg', 'U-own', 'S-node', 'S-edge', 'S-link') |
+| learning_type | str | learning type of gnns <br> (value: 'U-neg', 'U-own', 'S-node', 'S-edge', 'S-link-st', 'S-link-dy') |
 | hid_dim | int | dimension of hidden layers in a graph embedding model |
 | weight_decay | int | weight decay of the optimizer |
 
@@ -155,7 +155,13 @@ Here we introduce how to change different learning strategies.
 - Unsupervised learning with its own loss (`learning_type` = 'U-own')
 - Supervised learning for node classification (`learning_type` = 'S-node')
 - Supervised learning for edge classification (`learning_type` = 'S-edge')
-- Supervised learning for link prediction (`learning_type` = 'S-link')
+- Supervised learning for static(or dynamic) link prediction (`learning_type` = 'S-link-st' or 'S-link-dy')
+
+Note that **the difference between 'S-link-st' and 'S-link-dy' is **:
+
+- 'S-link-st' is designed for static supervised link prediction based model training, while 'S-link-dy' is designed for dynamic supervised link prediction based model training  
+- 'S-link-st' uses the current embedding matrix to predict edge labels of the current timestamp, while 'S-link-dy' uses the previous embedding matrix to predict edge labels of the current timestamp. So 'S-link-dy' needs 'duration' >= 2 and 'end_idx' - 'start_idx' >= 1 for both static and dynamic gnn methods.
+- In `embedding.py` files, the only difference between 'S-link-st' and 'S-link-dy' strategies is `edge_label_list = edge_label_list[1:]` and `embedding_list = embedding_list[:-1]`, which makes the previous embedding matrix match the current edge label matrix.
 
 #### GCN parameters
 Original GCN parameters
