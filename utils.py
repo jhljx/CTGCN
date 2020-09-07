@@ -5,7 +5,10 @@ import scipy.sparse as sp
 import networkx as nx
 import os
 import torch
-from sklearn.metrics import roc_auc_score
+
+
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
 
 
 # Check the existence of directory(file) path, if not, create one
@@ -18,13 +21,9 @@ def check_and_make_path(to_make):
 
 # Get networkx graph object from file path. If the graph is unweighted, then add the 'weight' attribute
 def get_nx_graph(file_path, full_node_list, sep='\t'):
-    node_num = len(full_node_list)
-    # node2idx_dict = dict(zip(full_node_list, np.arange(node_num)))
     df = pd.read_csv(file_path, sep=sep)
     if df.shape[1] == 2:
         df['weight'] = 1.0
-    #df['from_id'] = df['from_id'].apply(lambda x: node2idx_dict[x])
-    # df['to_id'] = df['to_id'].apply(lambda x: node2idx_dict[x])
     graph = nx.from_pandas_edgelist(df, "from_id", "to_id", edge_attr='weight', create_using=nx.Graph)
     graph.add_nodes_from(full_node_list)
     graph.remove_edges_from(nx.selfloop_edges(graph))
@@ -94,8 +93,6 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     values = torch.from_numpy(sparse_mx.data).float()
     shape = torch.Size(sparse_mx.shape)
     return torch.sparse.FloatTensor(indices, values, shape)
-
-
 
 
 # Transform a sparse matrix into a tuple
