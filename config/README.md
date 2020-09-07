@@ -1,6 +1,6 @@
 # Configuration
 
-Here we provide program configurations in this project. This project have several kinds of functions in graph representation learning, including **static graph embedding**, **dynamic graph embedding**, **link prediction**, **node classification** and **regular equivalence prediction**. 
+Here we provide program configurations in this project. This project have several kinds of functions in graph representation learning, including **static graph embedding**, **dynamic graph embedding**, **link prediction**, **node classification** and **graph centrality prediction**. 
 
 Then configurations for each function will be introduced. We also give the detailed parameter usage guide.
 
@@ -301,7 +301,7 @@ Note that VGRNN uses GRU to capture temporal features.
 #### EvolveGCN parameters
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: |
-| init_type | str | degree-based input feature initialization type <br> (value: 'gaussian', 'one-hot', 'combine')  |
+| init_type | str | degree-based input feature initialization type <br> (value: 'gaussian', 'one-hot', 'adj', 'combine')  |
 | std | float | std of the gaussian distribution if `init_type` is 'gaussian' <br> (**optional**) |
 | model_type | str | EvolveGCN model type <br> (value: 'EGCNH', 'EGCNO')
 
@@ -313,7 +313,7 @@ Note that in the EvolveGCN paper, it only uses one-hot node features as input.
 | max_core | int | number of k-core subgraphs for each dynamic graph <br> (default: -1, means all k-core subgraphs in each graph are used) | Common  |
 | trans_layer_num | int | feature transformation layer number | Common |
 | diffusion_layer_num | int | core-based diffusion (or CGCN) layer number | Common |
-| init_type | str | degree-based input feature initialization type <br> (**optional**, value: 'gaussian', 'one-hot', 'combine')  | CGCN-S, CTGCN-S |
+| init_type | str | degree-based input feature initialization type <br> (**optional**, value: 'gaussian', 'one-hot', 'adj', 'combine')  | CGCN-S, CTGCN-S |
 | std | float | std of the gaussian distribution if `init_type` is 'gaussian' <br> (**optional**) |  CGCN-S, CTGCN-S |
 | model_type | str | model type to identify different versions of the model <br> (value: 'C' or 'S', means C-version or S-version | Common |
 | rnn_type | str | rnn type to identify different rnns used in CGCN <br> (value: 'GRU' or 'LSTM') | Common |
@@ -418,9 +418,9 @@ The parameters used in the **edge classification** task is shown as follows:
 | max_iter | int | maximum iteration number in the sklearn LogisticRegression model |
 | worker | int | CPU multiprocessing thread number <br> (default: -1, means don't use multiprocessing) |
 
-## Regular Equivalence Prediction
+## Graph Centrality Prediction
 
-The parameters used in the **regular equivalence prediction** task is shown as follows:
+The parameters used in the **graph centrality prediction** task is shown as follows:
 
 | **Parameter** | **Type** | **Description** |
 |:----:|:----:| :----: | 
@@ -428,11 +428,11 @@ The parameters used in the **regular equivalence prediction** task is shown as f
 | origin_folder | str | graph folder path relative to `base_path`|
 | embed_folder | str |  embedding folder path relative to `base_path` |
 | node_file | str | node file path relative to `base_path` |
-| equpred_data_folder | str | regular equivalence data folder path relative to `base_path` |
-| equpred_res_folder | str |  regular equivalence prediction results folder path relative to `base_path` |
+| centrality_data_folder | str | graph centrality data folder path relative to `base_path` |
+| centrality_res_folder | str |  graph centrality prediction results folder path relative to `base_path` |
 | file_sep | str |  file separator for all files (i.e. '\t') |
 | generate | bool | whether to generate centrality data |
-| method_list | list | a list of graph embedding methods used to make regular equivalence prediction |
+| method_list | list | a list of graph embedding methods used to make graph centrality prediction |
 | alpha_list | list | alpha parameter list used in the sklearn RidgeRegression model |
 | split_fold | int | cross validation fold number |
 | worker | int | CPU multiprocessing thread number <br> (default: -1, means don't use multiprocessing) |

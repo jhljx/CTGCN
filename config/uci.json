@@ -397,7 +397,7 @@
       "embed_dim": 128,
       "use_cuda": true,
       "thread_num": 30,
-      "epoch": 50,
+      "epoch": 20,
       "lr": 1e-3,
       "batch_size": 2048,
       "load_model": false,
@@ -515,7 +515,7 @@
       "export": true,
       "record_time": false,
       "hid_dim": 128,
-      "init_type": "one-hot",
+      "init_type": "gaussian",
       "std": 1e-4,
       "model_type": "EGCNH",
       "weight_decay": 5e-4,
@@ -884,19 +884,34 @@
     "max_iter": 10000,
     "worker": -1
   },
-  "equ_pred":
+  "cent_pred":
   {
     "base_path": "/data/uci",
     "origin_folder": "1.format",
     "embed_folder": "2.embedding",
     "node_file": "nodes_set/nodes.csv",
-    "equpred_data_folder": "equpred_data",
-    "equpred_res_folder": "equpred_res",
+    "centrality_data_folder": "centrality_data",
+    "centrality_res_folder": "centrality_res",
     "file_sep": "\t",
     "generate": false,
     "method_list": ["GCN", "GAT", "GIN", "CGCN-C", "CGCN-S", "GCRN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "CTGCN-C", "CTGCN-S"],
     "alpha_list": [0.05, 0.5, 1, 2, 5, 10],
     "split_fold": 5,
-    "worker": 30
+    "worker": -1
+  },
+  "sim_pred":
+  {
+    "base_path": "/data/uci",
+    "origin_folder": "1.format",
+    "embed_folder": "2.embedding",
+    "node_file": "nodes_set/nodes.csv",
+    "similarity_data_folder": "similarity_data",
+    "similarity_res_folder": "similarity_res",
+    "file_sep": "\t",
+    "generate": false,
+    "method_list": ["GCN", "GAT", "GIN", "CGCN-C", "CGCN-S", "GCRN", "EvolveGCN", "DynGEM", "DynAE", "DynRNN", "DynAERNN", "CTGCN-C", "CTGCN-S"],
+    "alpha": 0.5,
+    "iter_num": 100,
+    "worker": -1
   }
 }
