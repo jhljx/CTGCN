@@ -6,11 +6,8 @@ import time
 import multiprocessing
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
-from utils import check_and_make_path, get_neg_edge_samples
+from utils import check_and_make_path, get_neg_edge_samples, sigmoid
 
-
-def sigmoid(x):
-    return 1 / (1 + np.exp(-x))
 
 # Generate data used for link prediction
 class DataGenerator(object):
@@ -223,11 +220,12 @@ class LinkPredictor(object):
             val_edges = pd.read_csv(os.path.join(self.lp_edge_base_path, date + '_val.csv'), sep=self.file_sep).values
             test_edges = pd.read_csv(os.path.join(self.lp_edge_base_path, date + '_test.csv'), sep=self.file_sep).values
             pre_f_name = f_list[i - 1]
-            if not os.path.exists(os.path.join(self.embedding_base_path, method, pre_f_name)):
+            pre_embedding_path = os.path.join(self.embedding_base_path, method, pre_f_name)
+            if not os.path.exists(pre_embedding_path):
                 continue
             # print('pre_f_name: ', f_list[i - 1], ', f_name: ', f_name)
             print('Current date is: {}'.format(f_name))
-            df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, pre_f_name), sep=self.file_sep, index_col=0)
+            df_embedding = pd.read_csv(pre_embedding_path, sep=self.file_sep, index_col=0)
             df_embedding = df_embedding.loc[self.full_node_list, :]
             # node_num = len(self.full_node_list)
             # for j in range(node_num):
@@ -274,7 +272,6 @@ def aggregate_results(base_path, lp_res_folder, start_idx, rep_num, method_list,
     for method in method_list:
         res_base_path = os.path.join(base_path, lp_res_folder + '_' + str(start_idx))
         res_path = os.path.join(res_base_path, method + '_auc_record.csv')
-
         column_names = ['date'] + [measure + '_' + str(start_idx) for measure in measure_list]
         df_method = pd.read_csv(res_path, sep=',', header=0, names=column_names)
         measure_df_dict = dict()
@@ -282,7 +279,7 @@ def aggregate_results(base_path, lp_res_folder, start_idx, rep_num, method_list,
             df_measure = df_method.loc[:, ['date', measure + '_' + str(start_idx)]].copy()
             measure_df_dict[measure] = df_measure
         for i in range(start_idx + 1, start_idx + rep_num):
-            res_base_path = os.path.join(base_path, 'link_prediction_res_' + str(i))
+            res_base_path = os.path.join(base_path, lp_res_folder + '_' + str(i))
             res_path = os.path.join(res_base_path, method + '_auc_record.csv')
             column_names = ['date'] + [measure + '_' + str(i) for measure in measure_list]
             df_rep = pd.read_csv(res_path, sep=',', header=0, names=column_names)
@@ -295,7 +292,7 @@ def aggregate_results(base_path, lp_res_folder, start_idx, rep_num, method_list,
             measure_column = [measure + '_' + str(i) for i in range(start_idx, start_idx + rep_num)]
             df_measure = measure_df_dict[measure]
             df_measure['avg'] = df_measure.loc[:, measure_column].mean(axis=1)
-            measure_df_dict[measure]['max'] = df_measure.loc[:, measure_column].max(axis=1)
+            df_measure['max'] = df_measure.loc[:, measure_column].max(axis=1)
             df_measure['min'] = df_measure.loc[:, measure_column].min(axis=1)
             output_path = os.path.join(output_base_path, method + '_' + measure + '_record.csv')
             df_measure.to_csv(output_path, sep=',', index=False)

@@ -21,7 +21,6 @@ class DataGenerator(object):
     full_node_list: list
     node2idx_dict: dict
     node_num: int
-    label_dict: dict
     train_ratio: float
     val_ratio: float
     test_ratio: float
@@ -38,7 +37,6 @@ class DataGenerator(object):
         self.full_node_list = nodes_set['node'].tolist()
         self.node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num)))
         self.node_num = len(self.full_node_list)
-        self.label_dict = dict()
 
         assert train_ratio + test_ratio + val_ratio <= 1.0
         self.train_ratio = train_ratio
@@ -57,9 +55,6 @@ class DataGenerator(object):
         df_edges[['from_id', 'to_id']] = df_edges[['from_id', 'to_id']].applymap(lambda x: self.node2idx_dict[x])
         edge_arr = df_edges[['from_id', 'to_id']].values
         label_arr = df_edges['label'].values
-        unique_labels = df_edges['label'].unique()
-        for label in unique_labels:
-            self.label_dict[label] = 1
 
         edge_indices = np.arange(edge_num)
         np.random.shuffle(edge_indices)
@@ -119,7 +114,7 @@ class EdgeClassifier(object):
     C_list: list
     max_iter: int
 
-    def __init__(self, base_path, origin_folder, embedding_folder, edgeclas_folder, output_folder, node_file, unique_labels, file_sep='\t', C_list=None, max_iter=5000):
+    def __init__(self, base_path, origin_folder, embedding_folder, edgeclas_folder, output_folder, node_file, label_folder, file_sep='\t', C_list=None, max_iter=5000):
         self.base_path = base_path
         self.origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
         self.embedding_base_path = os.path.abspath(os.path.join(base_path, embedding_folder))
@@ -129,8 +124,13 @@ class EdgeClassifier(object):
 
         node_file_path = os.path.abspath(os.path.join(base_path, node_file))
         nodes_set = pd.read_csv(node_file_path, names=['node'])
-        self.full_node_list = nodes_set['edge'].tolist()
-        self.unique_labels = unique_labels
+        self.full_node_list = nodes_set['node'].tolist()
+        self.label_base_path = os.path.abspath(os.path.join(base_path, label_folder))
+        f_list = os.listdir(self.label_base_path)
+        assert len(f_list) > 0
+        label_path = os.path.join(self.label_base_path, f_list[0])
+        df_label = pd.read_csv(label_path, sep=file_sep)
+        self.unique_labels = df_label['label'].unique()
         self.C_list = C_list
         self.max_iter = max_iter
 
@@ -191,9 +191,10 @@ class EdgeClassifier(object):
             train_edges = pd.read_csv(os.path.join(self.edgeclas_base_path, date + '_train.csv'), sep=self.file_sep).values
             val_edges = pd.read_csv(os.path.join(self.edgeclas_base_path, date + '_val.csv'), sep=self.file_sep).values
             test_edges = pd.read_csv(os.path.join(self.edgeclas_base_path, date + '_test.csv'), sep=self.file_sep).values
-            if not os.path.exists(os.path.join(self.embedding_base_path, method, f_name)):
+            cur_embedding_path = os.path.join(self.embedding_base_path, method, f_name)
+            if not os.path.exists(cur_embedding_path):
                 continue
-            df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, f_name), sep=self.file_sep, index_col=0)
+            df_embedding = pd.read_csv(cur_embedding_path, sep=self.file_sep, index_col=0)
             df_embedding = df_embedding.loc[self.full_node_list]
             embeddings = df_embedding.values
 
@@ -286,7 +287,7 @@ def edge_classification(args):
                 data_generator.generate_edge_samples_all_time(sep=file_sep, worker=worker)
 
             edge_classifier = EdgeClassifier(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, edgeclas_folder=edgecls_data_folder + '_' + str(i),
-                                             output_folder=edgecls_res_folder + '_' + str(i), node_file=node_file, file_sep=file_sep, unique_labels=list(data_generator.label_dict.keys()), C_list=C_list, max_iter=max_iter)
+                                             output_folder=edgecls_res_folder + '_' + str(i), node_file=node_file, label_folder=elabel_folder, file_sep=file_sep, C_list=C_list, max_iter=max_iter)
             edge_classifier.edge_classification_all_method(method_list=method_list, worker=worker)
 
     t2 = time.time()

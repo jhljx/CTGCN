@@ -11,7 +11,7 @@ from sklearn.metrics import mean_squared_error
 from utils import check_and_make_path
 
 
-# Generate data used for equivalence prediction
+# Generate data used for centrality prediction
 class DataGenerator(object):
     base_path: str
     input_base_path: str
@@ -103,23 +103,23 @@ class DataGenerator(object):
             pool.join()
 
 
-# Equivalence predictor class
-class EquivalencePredictor(object):
+# Centrality predictor class
+class CentralityPredictor(object):
     base_path: str
     origin_base_path: str
     embedding_base_path: str
-    equ_base_path: str
+    centrality_base_path: str
     output_base_path: str
     file_sep: str
     full_node_list: list
     alpha_list: list
     split_fold: int
 
-    def __init__(self, base_path, origin_folder, embedding_folder, equ_folder, output_folder, node_file, file_sep='\t', alpha_list=None, split_fold=5):
+    def __init__(self, base_path, origin_folder, embedding_folder, centrality_folder, output_folder, node_file, file_sep='\t', alpha_list=None, split_fold=5):
         self.base_path = base_path
         self.origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
         self.embedding_base_path = os.path.abspath(os.path.join(base_path, embedding_folder))
-        self.equ_base_path = os.path.abspath(os.path.join(base_path, equ_folder))
+        self.centrality_base_path = os.path.abspath(os.path.join(base_path, centrality_folder))
         self.output_base_path = os.path.abspath(os.path.join(base_path, output_folder))
         self.file_sep = file_sep
 
@@ -137,16 +137,7 @@ class EquivalencePredictor(object):
         centrality_list = ['closeness', 'betweenness', 'eigenvector', 'kcore']
         mse_list = [date]
         for i, centrality in enumerate(centrality_list):
-            # model = LinearRegression(n_jobs=-1)
-            # min_error = float("inf")
-            # # only using a certain cv value may cause some method have very large MSE, so we need to try different cv values
-            # # for cv in [2, 3, 4, 5, 6, 7, 8, 9, 10, 20]:
-            # y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=5)
-            # error = mean_squared_error(centrality_data[:, i], y_pred) / np.mean(centrality_data[:, i])
-            # min_error = min(min_error, error)
-
             min_error = float("inf")
-            # for alpha in [0.05, 0.5, 1, 2, 5, 10]:
             for alpha in self.alpha_list:
                 model = Ridge(alpha=alpha)
                 y_pred = cross_val_predict(model, embeddings, centrality_data[:, i], cv=self.split_fold)
@@ -155,18 +146,19 @@ class EquivalencePredictor(object):
             mse_list.append(min_error)
         return mse_list
 
-    def equivalence_prediction_all_time(self, method):
+    def centrality_prediction_all_time(self, method):
         print('method = ', method)
         f_list = sorted(os.listdir(self.origin_base_path))
         all_mse_list = []
         for i, f_name in enumerate(f_list):
             print('Current date is: {}'.format(f_name))
             date = f_name.split('.')[0]
-            df_centrality = pd.read_csv(os.path.join(self.equ_base_path, date + '_centrality.csv'), sep=self.file_sep)
+            df_centrality = pd.read_csv(os.path.join(self.centrality_base_path, date + '_centrality.csv'), sep=self.file_sep)
             centrality_data= df_centrality.iloc[:, 1:].values
-            if not os.path.exists(os.path.join(self.embedding_base_path, method, f_name)):
+            cur_embedding_path = os.path.join(self.embedding_base_path, method, f_name)
+            if not os.path.exists(cur_embedding_path):
                 continue
-            df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, f_name), sep=self.file_sep, index_col=0)
+            df_embedding = pd.read_csv(cur_embedding_path, sep=self.file_sep, index_col=0)
             df_embedding = df_embedding.loc[self.full_node_list]
             embeddings = df_embedding.values
             mse_list = self.get_prediction_error(centrality_data, embeddings, date)
@@ -181,34 +173,34 @@ class EquivalencePredictor(object):
         output_file_path = os.path.join(self.output_base_path, method + '_mse_record.csv')
         df_output.to_csv(output_file_path, sep=',', index=False)
 
-    def equivalence_prediction_all_method(self, method_list=None, worker=-1):
-        print('Start equivalence_prediction!')
+    def centrality_prediction_all_method(self, method_list=None, worker=-1):
+        print('Start graph centrality prediction!')
         if method_list is None:
             method_list = os.listdir(self.embedding_base_path)
 
         if worker <= 0:
             for method in method_list:
                 print('Current method is :{}'.format(method))
-                self.equivalence_prediction_all_time(method)
+                self.centrality_prediction_all_time(method)
         else:
             worker = min(worker, os.cpu_count())
             pool = multiprocessing.Pool(processes=worker)
             print("start " + str(worker) + " worker(s)")
 
             for method in method_list:
-                pool.apply_async(self.equivalence_prediction_all_time, (method,))
+                pool.apply_async(self.centrality_prediction_all_time, (method,))
             pool.close()
             pool.join()
-        print('Finish equivalence_prediction!')
+        print('Finish graph centrality prediction!')
 
 
-def equivalence_prediction(args):
+def centrality_prediction(args):
     base_path = args['base_path']
     origin_folder = args['origin_folder']
     embedding_folder = args['embed_folder']
     node_file = args['node_file']
-    equ_data_folder = args['equpred_data_folder']
-    equ_res_folder = args['equpred_res_folder']
+    centrality_data_folder = args['centrality_data_folder']
+    centrality_res_folder = args['centrality_res_folder']
     file_sep = args['file_sep']
     generate = args['generate']
     method_list = args['method_list']
@@ -216,14 +208,14 @@ def equivalence_prediction(args):
     split_fold = args['split_fold']  # cross validation split fold
     worker = args['worker']
 
-    data_generator = DataGenerator(base_path=base_path, input_folder=origin_folder, output_folder=equ_data_folder, node_file=node_file, file_sep=file_sep)
+    data_generator = DataGenerator(base_path=base_path, input_folder=origin_folder, output_folder=centrality_data_folder, node_file=node_file, file_sep=file_sep)
     if generate:
         data_generator.generate_all_node_samples(sep=file_sep, worker=worker)
 
-    equivalence_predictor = EquivalencePredictor(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, equ_folder=equ_data_folder,
-                                                 output_folder=equ_res_folder, node_file=node_file, file_sep=file_sep, alpha_list=alpha_list, split_fold=split_fold)
+    centrality_predictor = CentralityPredictor(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, centrality_folder=centrality_data_folder,
+                                                 output_folder=centrality_res_folder, node_file=node_file, file_sep=file_sep, alpha_list=alpha_list, split_fold=split_fold)
 
     t1 = time.time()
-    equivalence_predictor.equivalence_prediction_all_method(method_list=method_list, worker=worker)
+    centrality_predictor.centrality_prediction_all_method(method_list=method_list, worker=worker)
     t2 = time.time()
-    print('equivalence prediction cost time: ', t2 - t1, ' seconds!')
+    print('centrality prediction cost time: ', t2 - t1, ' seconds!')

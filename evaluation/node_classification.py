@@ -21,7 +21,6 @@ class DataGenerator(object):
     full_node_list: list
     node2idx_dict: dict
     node_num: int
-    label_dict: dict
     train_ratio: float
     val_ratio: float
     test_ratio: float
@@ -38,7 +37,6 @@ class DataGenerator(object):
         self.full_node_list = nodes_set['node'].tolist()
         self.node_num = len(self.full_node_list)
         self.node2idx_dict = dict(zip(self.full_node_list, np.arange(self.node_num)))
-        self.label_dict = dict()
 
         assert train_ratio + test_ratio + val_ratio <= 1.0
         self.train_ratio = train_ratio
@@ -54,12 +52,9 @@ class DataGenerator(object):
 
         df_nodes = pd.read_csv(file_path, sep=sep, header=0, names=['node', 'label'])
         node_num = df_nodes.shape[0]
-        df_nodes['node'] = df_nodes['node'].applymap(lambda x: self.node2idx_dict[x])
+        df_nodes['node'] = df_nodes['node'].apply(lambda x: self.node2idx_dict[x])
         node_arr = df_nodes['node'].values
         label_arr = df_nodes['label'].values
-        unique_labels = df_nodes['label'].unique()
-        for label in unique_labels:
-            self.label_dict[label] = 1
 
         node_indices = np.arange(node_num)
         np.random.shuffle(node_indices)
@@ -118,7 +113,7 @@ class NodeClassifier(object):
     C_list: list
     max_iter: int
 
-    def __init__(self, base_path, origin_folder, embedding_folder, nodeclas_folder, output_folder, node_file, unique_labels, file_sep='\t', C_list=None, max_iter=5000):
+    def __init__(self, base_path, origin_folder, embedding_folder, nodeclas_folder, output_folder, node_file, label_folder, file_sep='\t', C_list=None, max_iter=5000):
         self.base_path = base_path
         self.origin_base_path = os.path.abspath(os.path.join(base_path, origin_folder))
         self.embedding_base_path = os.path.abspath(os.path.join(base_path, embedding_folder))
@@ -129,7 +124,12 @@ class NodeClassifier(object):
         node_file_path = os.path.abspath(os.path.join(base_path, node_file))
         nodes_set = pd.read_csv(node_file_path, names=['node'])
         self.full_node_list = nodes_set['node'].tolist()
-        self.unique_labels = unique_labels
+        label_base_path = os.path.abspath(os.path.join(base_path, label_folder))
+        f_list = os.listdir(label_base_path)
+        assert len(f_list) > 0
+        label_path = os.path.join(label_base_path, f_list[0])
+        df_label = pd.read_csv(label_path, sep=file_sep)
+        self.unique_labels = df_label['label'].unique()
         self.C_list = C_list
         self.max_iter = max_iter
 
@@ -190,9 +190,10 @@ class NodeClassifier(object):
             train_nodes = pd.read_csv(os.path.join(self.nodecls_base_path, date + '_train.csv'), sep=self.file_sep).values
             val_nodes = pd.read_csv(os.path.join(self.nodecls_base_path, date + '_val.csv'), sep=self.file_sep).values
             test_nodes = pd.read_csv(os.path.join(self.nodecls_base_path, date + '_test.csv'), sep=self.file_sep).values
-            if not os.path.exists(os.path.join(self.embedding_base_path, method, f_name)):
+            cur_embedding_path = os.path.join(self.embedding_base_path, method, f_name)
+            if not os.path.exists(cur_embedding_path):
                 continue
-            df_embedding = pd.read_csv(os.path.join(self.embedding_base_path, method, f_name), sep=self.file_sep, index_col=0)
+            df_embedding = pd.read_csv(cur_embedding_path, sep=self.file_sep, index_col=0)
             df_embedding = df_embedding.loc[self.full_node_list]
             embeddings = df_embedding.values
 
@@ -237,11 +238,14 @@ def aggregate_results(base_path, nodecls_res_folder, start_idx, rep_num, method_
     for method in method_list:
         res_base_path = os.path.join(base_path, nodecls_res_folder + '_' + str(start_idx))
         res_path = os.path.join(res_base_path, method + '_acc_record.csv')
-        df_method = pd.read_csv(res_path, sep=',', header=0, names=['date', 'acc_' + str(start_idx)])
+
+        column_names = ['date', 'acc_' + str(start_idx)]
+        df_method = pd.read_csv(res_path, sep=',', header=0, names=column_names)
         for i in range(start_idx + 1, start_idx + rep_num):
             res_base_path = os.path.join(base_path, nodecls_res_folder + '_' + str(i))
             res_path = os.path.join(res_base_path, method + '_acc_record.csv')
-            df_rep = pd.read_csv(res_path, sep=',', header=0, names=['date', 'acc_' + str(i)])
+            column_names = ['date', 'acc_' + str(i)]
+            df_rep = pd.read_csv(res_path, sep=',', header=0, names=column_names)
             df_method = pd.concat([df_method, df_rep.iloc[:, [1]]], axis=1)
         output_base_path = os.path.join(base_path, nodecls_res_folder)
         check_and_make_path(output_base_path)
@@ -285,7 +289,7 @@ def node_classification(args):
                 data_generator.generate_node_samples_all_time(sep=file_sep, worker=worker)
 
             node_classifier = NodeClassifier(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, nodeclas_folder=nodecls_data_folder + '_' + str(i),
-                                             output_folder=nodecls_res_folder + '_' + str(i), node_file=node_file, file_sep=file_sep, unique_labels=list(data_generator.label_dict.keys()), C_list=C_list, max_iter=max_iter)
+                                             output_folder=nodecls_res_folder + '_' + str(i), node_file=node_file, label_folder=nlabel_folder, file_sep=file_sep, C_list=C_list, max_iter=max_iter)
             node_classifier.node_classification_all_method(method_list=method_list, worker=worker)
 
     t2 = time.time()
