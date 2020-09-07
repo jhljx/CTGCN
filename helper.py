@@ -74,12 +74,9 @@ class DataLoader:
                     delta = spmat - spmat_list[j - 1]    # reduce subsequent computation complexity and reduce memory cost!
                     if delta.sum() == 0:  # reduce computation complexity and memory cost!
                         continue
-                # print('j = ', j, ', f_name = ', f_name)
                 # Normalization will reduce the self weight, hence affect its performance! So we omit normalization.
-                # print('j = ', j, ', spmat max: ', spmat.max(), ', spmat min: ', spmat.min())
                 sptensor = sparse_mx_to_torch_sparse_tensor(spmat)
                 tmp_adj_list.append(sptensor.cuda() if self.has_cuda else sptensor)
-            # print('-----------------')
             # print('time: ', i, 'core len: ', len(tmp_adj_list))
             core_adj_list.append(tmp_adj_list)
         return core_adj_list
@@ -110,7 +107,7 @@ class DataLoader:
 
     # load node features, use degree related features
     def get_degree_feature_list(self, origin_base_path, start_idx, duration, sep='\t', init_type='gaussian', std=1e-4):
-        assert init_type in ['gaussian', 'combine', 'one-hot']
+        assert init_type in ['gaussian', 'adj', 'combine', 'one-hot']
         x_list = []
         max_degree = 0
         adj_list = []
@@ -136,21 +133,19 @@ class DataLoader:
                 input_dim = fea_arr.shape[1]
                 fea_tensor = torch.from_numpy(fea_arr).float()
                 x_list.append(fea_tensor.cuda() if self.has_cuda else fea_tensor)
-
+            elif init_type == 'adj':
+                input_dim = self.node_num
+                feat_tensor = sparse_mx_to_torch_sparse_tensor(adj_list[i])
+                x_list.append(feat_tensor.cuda() if self.has_cuda else feat_tensor)
             elif init_type == 'combine':
                 fea_list = []
                 for degree in degrees:
                     fea_list.append(np.random.normal(degree, std, max_degree + 1))
-                fea_arr = np.array(fea_list).astype(np.float32)
-                ###################
-                # here combine the adjacent matrix feature could improve strcutral role classification performance,
-                # but if the graph is large, turning a sparse adjacent matrix into a dense adjacent feature matrix will be memory consuming!
-                fea_arr = np.hstack((fea_arr, adj_list[i].toarray())).astype(np.float32)
-                ###################
-                input_dim = fea_arr.shape[1]
-                fea_tensor = torch.from_numpy(fea_arr).float()
-                x_list.append(fea_tensor.cuda() if self.has_cuda else fea_tensor)
-
+                sp_feat = sp.coo_matrix(np.array(fea_list))
+                sp_feat = sp.hstack((sp_feat, adj_list[i])).astype(np.float32)
+                input_dim = sp_feat.shape[1]
+                feat_tensor = sparse_mx_to_torch_sparse_tensor(sp_feat)
+                x_list.append(feat_tensor.cuda() if self.has_cuda else feat_tensor)
             else:  # one-hot degree feature
                 data = np.ones(degrees.shape[0], dtype=np.int)
                 row = np.arange(degrees.shape[0])
@@ -207,9 +202,7 @@ class DataLoader:
             unique_labels = df_nodes['label'].unique()
             for label in unique_labels:
                 label_dict[label] = 1
-            df_nodes.index = df_nodes['node'].values
-            df_nodes = df_nodes.loc[np.arange(self.node_num), :]
-            node_labels = torch.from_numpy(df_nodes['label'].values)
+            node_labels = torch.from_numpy(df_nodes.values).long()
             node_label_list.append(node_labels.cuda() if self.has_cuda else node_labels)
         return node_label_list, len(label_dict.keys())
 
@@ -224,6 +217,6 @@ class DataLoader:
             unique_labels = df_edges['label'].unique()
             for label in unique_labels:
                 label_dict[label] = 1
-            node_labels = torch.from_numpy(df_edges.values)
-            edge_label_list.append(node_labels.cuda() if self.has_cuda else node_labels)
+            edge_labels = torch.from_numpy(df_edges.values).long()
+            edge_label_list.append(edge_labels.cuda() if self.has_cuda else edge_labels)
         return edge_label_list, len(label_dict.keys())
