@@ -67,16 +67,17 @@ class MLPClassifier(nn.Module):
             self.mlp_list.append(MLP(input_dim, hidden_dim, output_dim, layer_num, bias=bias, activate_type=activate_type))
 
     def forward(self, x, batch_indices=None):
-        if isinstance(x, list):
+        if isinstance(x, list) or len(x.size()) == 3:  # list or 3D tensor(GCRN, CTGCN output)
             timestamp_num = len(x)
             output_list = []
             for i in range(timestamp_num):
                 output_list.append(self.mlp_classifier(x[i], batch_indices[i]))
             return output_list
+        return self.mlp_classifier(x, batch_indices)
 
     def mlp_classifier(self, x, batch_indices=None):
         # x is a tensor
-        embedding_mat = x[batch_indices] if batch_indices else x
+        embedding_mat = x[batch_indices] if batch_indices is not None else x
         x = self.mlp_list[0](embedding_mat)
         return x
 
@@ -158,7 +159,7 @@ class CGCN(nn.Module):
             self.mlp = MLP(input_dim, hidden_dim, hidden_dim, trans_num, bias=bias, activate_type=trans_activate_type)
             self.duffision = CDN(hidden_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type)
         else:
-            self.mlp = MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias)
+            self.mlp = MLP(input_dim, hidden_dim, output_dim, trans_num, bias=bias, activate_type=trans_activate_type)
             self.duffision = CDN(output_dim, output_dim, output_dim, diffusion_num, rnn_type=rnn_type)
 
     def forward(self, x, adj):
