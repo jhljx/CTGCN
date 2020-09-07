@@ -91,61 +91,54 @@ class BaseEmbedding:
 
 # Supervised embedding class(used for node classification)
 class SupervisedEmbedding(BaseEmbedding):
-    classifier: MLPClassifier
 
     def __init__(self, base_path, origin_folder, embedding_folder, node_list, model, loss, classifier: MLPClassifier, model_folder='model', has_cuda=False):
         super(SupervisedEmbedding, self).__init__(base_path, origin_folder, embedding_folder, node_list, model, loss, model_folder=model_folder, has_cuda=has_cuda)
         self.classifier = classifier
 
     def get_batch_info(self, learning_type, node_labels, edge_labels, edge_list, batch_size, shuffle, train_ratio, val_ratio, test_ratio):
-        # consider node classification data
-        if learning_type == 'S-node':
-            assert node_labels
-            timestamp_num = len(node_labels)
-            device = node_labels[0].device
+        # consider node classification data / edge classification data
+        if learning_type in ['S-node', 'S-edge']:
+            if learning_type == 'S-node':
+                assert node_labels
+                timestamp_num = len(node_labels)
+                device = node_labels[0].device
+            else:
+                assert edge_labels
+                timestamp_num = len(edge_labels)
+                device = edge_labels[0].device
+
             idx_train, label_train, idx_val, label_val, idx_test, label_test = [], [], [], [], [], []
             for i in range(timestamp_num):
-                cur_node_labels = node_labels[i]  # tensor
-                assert cur_node_labels.shape[1] == 2
-                node_indices = torch.randperm(self.node_num, device=device) if shuffle else torch.arange(self.node_num, device=device)
-                train_num = int(np.floor(self.node_num * train_ratio))
-                val_num = int(np.floor(self.node_num * val_ratio))
-                test_num = int(np.floor(self.node_num * test_ratio))
+                if learning_type == 'S-node':
+                    cur_labels = node_labels[i]  # tensor
+                    assert cur_labels.shape[1] == 2
+                else:
+                    cur_labels = edge_labels[i]  # tensor
+                    assert cur_labels.shape[1] == 3
+                item_num = cur_labels.shape[0]
+                item_indices = torch.arange(item_num, device=device)
+                train_num = int(np.floor(item_num * train_ratio))
+                val_num = int(np.floor(item_num * val_ratio))
+                test_num = int(np.floor(item_num * test_ratio))
 
-                train_indices = node_indices[: train_num]
-                idx_train.append(train_indices)
-                label_train.append(node_labels[train_indices, 1])
-                val_indices = node_indices[train_num: train_num + val_num]
-                idx_val.append(val_indices)
-                label_val.append(node_labels[val_indices, 1])
-                test_indices = node_indices[train_num + val_num: train_num + val_num + test_num]
-                idx_test.append(test_indices)
-                label_test.append(node_labels[test_indices, 1])
-            return idx_train, label_train, idx_val, label_val, idx_test, label_test
-        # consider edge classification data
-        elif learning_type == 'S-edge':
-            assert edge_labels
-            timestamp_num = len(edge_labels)
-            device = edge_labels[0].device
-            idx_train, label_train, idx_val, label_val, idx_test, label_test = [], [], [], [], [], []
-            for i in range(timestamp_num):
-                all_edges = edge_labels[i]
-                assert all_edges.shape[1] == 3
-                all_edge_num = edge_labels[i].shape[0]
-                edge_indices = torch.randperm(all_edge_num, device=device) if shuffle else torch.arange(all_edge_num, device=device)
-                train_num = int(np.floor(all_edge_num * train_ratio))
-                val_num = int(np.floor(all_edge_num * val_ratio))
-                test_num = int(np.floor(all_edge_num * test_ratio))
-
-                train_indices = edge_indices[: train_num]
-                idx_train.append(all_edges[train_indices, :2].transpose(0, 1))
-                label_train.append(edge_labels[train_indices, 2])
-                val_indices = edge_indices[train_num: train_num + val_num]
-                idx_val.append(all_edges[val_indices, :2].transpose(0, 1))
-                label_val.append(edge_labels[val_indices, 2])
-                test_indices = edge_indices[train_num + val_num: train_num + val_num + test_num]
-                idx_test.append(all_edges[test_indices, :2].transpose(0, 1))
-                label_test.append(edge_labels[test_indices, 2])
+                train_indices = item_indices[: train_num]
+                val_indices = item_indices[train_num: train_num + val_num]
+                test_indices = item_indices[train_num + val_num: train_num + val_num + test_num]
+                if learning_type == 'S-node':
+                    train_items, train_labels = cur_labels[train_indices, 0], cur_labels[train_indices, 1]
+                    val_items, val_labels = cur_labels[val_indices, 0], cur_labels[val_indices, 1]
+                    test_items, test_labels = cur_labels[test_indices, 0], cur_labels[test_indices, 1]
+                else:
+                    train_items, train_labels = cur_labels[train_indices, :2].transpose(0, 1), cur_labels[train_indices, 2]
+                    val_items, val_labels = cur_labels[val_indices, :2].transpose(0, 1), cur_labels[val_indices, 2]
+                    test_items, test_labels = cur_labels[test_indices, :2].transpose(0, 1), cur_labels[test_indices, 2]
+                idx_train.append(train_items)
+                label_train.append(train_labels)
+                idx_val.append(val_items)
+                label_val.append(val_labels)
+                idx_test.append(test_items)
+                label_test.append(test_labels)
             return idx_train, label_train, idx_val, label_val, idx_test, label_test
         # consider link prediction(static or dynamic)
         else:
@@ -160,9 +153,10 @@ class SupervisedEmbedding(BaseEmbedding):
             else:  # learning_type == 'S-link-st'
                 start_idx = 0
             for i in range(start_idx, timestamp_num):
-                assert edge_list[i].shape[0] == 2
-                all_edge_num = edge_list[i].shape[1]
-                all_edges = edge_list[i].transpose(0, 1).tolist()
+                cur_edges = edge_list[i]
+                assert cur_edges.shape[0] == 2
+                all_edge_num = cur_edges.shape[1]
+                all_edges = cur_edges.transpose(0, 1).tolist()
                 all_edge_dict = dict(zip(map(lambda x: tuple(x), all_edges), np.ones(all_edge_num).astype(np.int)))
                 # remove self-loops
                 for nid in range(self.node_num):
@@ -217,12 +211,13 @@ class SupervisedEmbedding(BaseEmbedding):
             embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
-        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
+        # elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
+        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN']:
             embedding_list = model(x_list, edge_list)
             embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
             loss_input_list = cls_list
-        else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
+        else:  # GCN, GAT, SAGE, GIN, CGCN-C, GCRN, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
             embedding_list = embedding_list[:-1] if learning_type == 'S-link-dy' else embedding_list
             cls_list = classifier(embedding_list, batch_indices)
@@ -315,10 +310,11 @@ class UnsupervisedEmbedding(BaseEmbedding):
             dist_max_list, dist_argmax_list = preselect_anchor(self.node_num, node_dist_list, self.device)
             embedding_list = model(x_list, dist_max_list, dist_argmax_list)
             loss_input_list = [embedding_list, batch_indices]
-        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
+        # elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'GCRN']:
+        elif model.method_name in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN']:
             embedding_list = model(x_list, edge_list)
             loss_input_list = [embedding_list, batch_indices]
-        else:  # GCN, GAT, SAGE, GIN, CGCN-C, EvolveGCN, CTGCN-C
+        else:  # GCN, GAT, SAGE, GIN, CGCN-C, GCRN, EvolveGCN, CTGCN-C
             embedding_list = model(x_list, adj_list)
             loss_input_list = [embedding_list, batch_indices]
         output_list = structure_list if model.method_name in ['CGCN-S', 'CTGCN-S'] else embedding_list
