@@ -38,42 +38,42 @@ def get_data_loader(args):
     return data_loader
 
 
-def get_input_data(method, idx, data_loader, args):
+def get_input_data(method, idx, time_length, data_loader, args):
     assert method in get_supported_gnn_methods()
 
     origin_base_path = args['origin_base_path']
     core_base_path = args['core_base_path']
     node_feature_path = args['nfeature_path']  # all the data sets we use don't have node features, so this path is None
     file_sep = args['file_sep']
-    duration = args['duration']
 
     core_adj_list = []
     if method in get_core_based_methods():  # CGCN-C, CGCN-S, CTGCN-C, CTGCN-S
         max_core = args['max_core']
-        core_adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=duration, max_core=max_core)
-    if method in ['GCN', 'GAT']:
+        core_adj_list = data_loader.get_core_adj_list(core_base_path, start_idx=idx, duration=time_length, max_core=max_core)
+    if method in ['GCN', 'GAT', 'GCRN']:  # If GCRN uses TgGCN, this GCRN should be removed!
         normalize, row_norm, add_eye = True, True, True
     elif method in ['EvolveGCN']:  # normalization is quite important for the performance improvement of EvolveGCN
         normalize, row_norm, add_eye = True, False, True
     else:  # SAGE, GIN, TgGCN, TgGAT, TgSAGE, TgGIN, PGNN, GCRN, VGRNN, core_based_methods
         normalize, row_norm, add_eye = False, False, False
 
-    adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, normalize=normalize, row_norm=row_norm, add_eye=add_eye, data_type='tensor')
+    adj_list = data_loader.get_date_adj_list(origin_base_path, start_idx=idx, duration=time_length, sep=file_sep, normalize=normalize, row_norm=row_norm, add_eye=add_eye, data_type='tensor')
     # all gnn methods need edge_list when learning_type='S-link'
     edge_list = [adj._indices() for adj in adj_list]  # edge_indices: [2, edge_num]
 
     if method in get_core_based_methods():  # CGCN-C, CGCN-S, CTGCN-C, CTGCN-S
         adj_list = core_adj_list
-    elif method in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'PGNN', 'GCRN']:  # VGRNN uses GAE architecture, so adj_list is needed!
+    # elif method in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'PGNN', 'GCRN']:
+    elif method in ['TgGCN', 'TgGAT', 'TgSAGE', 'TgGIN', 'PGNN']:  # VGRNN uses GAE architecture, so adj_list is needed!
         adj_list = None
 
     if method in ['EvolveGCN', 'CGCN-S', 'CTGCN-S'] and node_feature_path is None:
         init_type = args['init_type']
         std = args.get('std', 1e-4)
-        x_list, input_dim = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=duration, sep=file_sep, init_type=init_type, std=std)
+        x_list, input_dim = data_loader.get_degree_feature_list(origin_base_path, start_idx=idx, duration=time_length, sep=file_sep, init_type=init_type, std=std)
         # print('input_dim: ', input_dim)
     else:   # GCN, TgGCN, GAT, TgGAT, SAGE, TgSAGE, GIN, TgGIN, PGNN, GCRN, VGRNN, CGCN-C, CTGCN-C
-        x_list, input_dim = data_loader.get_feature_list(node_feature_path, start_idx=idx, duration=duration, shuffle=False)
+        x_list, input_dim = data_loader.get_feature_list(node_feature_path, start_idx=idx, duration=time_length, shuffle=False)
         if method == 'VGRNN':
             x_list = torch.stack(x_list)
 
@@ -87,7 +87,7 @@ def get_input_data(method, idx, data_loader, args):
     return input_dim, adj_list, x_list, edge_list, node_dist_list
 
 
-def get_gnn_model(method, args):
+def get_gnn_model(method, time_length, args):
     assert method in get_supported_gnn_methods()
 
     from baseline.gcn import GCN, TgGCN
@@ -105,7 +105,6 @@ def get_gnn_model(method, args):
     embed_dim = args['embed_dim']
     dropout = args.get('dropout', None)
     bias = args.get('bias', None)
-    duration = args.get('duration', None)
 
     if method == 'GCN':
         return GCN(input_dim, hidden_dim, embed_dim, dropout=dropout, bias=bias)
@@ -141,14 +140,14 @@ def get_gnn_model(method, args):
         elif method == 'GCRN':
             rnn_type = args['rnn_type']
             return GCRN(input_dim, feature_dim, hidden_dim, embed_dim, feature_pre=feature_pre, layer_num=layer_num, dropout=dropout, bias=bias,
-                        duration=duration, rnn_type=rnn_type)
+                        duration=time_length, rnn_type=rnn_type)
     elif method == 'VGRNN':
         rnn_layer_num = args['rnn_layer_num']
         conv_type = args['conv_type']
-        return  VGRNN(input_dim, hidden_dim, embed_dim, rnn_layer_num=rnn_layer_num, conv_type=conv_type, bias=bias)
+        return VGRNN(input_dim, hidden_dim, embed_dim, rnn_layer_num=rnn_layer_num, conv_type=conv_type, bias=bias)
     elif method == 'EvolveGCN':
         egcn_type = args['model_type']
-        return EvolveGCN(input_dim, hidden_dim, embed_dim, duration=duration, egcn_type=egcn_type)
+        return EvolveGCN(input_dim, hidden_dim, embed_dim, egcn_type=egcn_type)
     else:  # core-based gcn methods(both static and temporal core-based gcn)
         trans_num = args['trans_layer_num']
         diffusion_num = args['diffusion_layer_num']
@@ -160,16 +159,15 @@ def get_gnn_model(method, args):
             return CGCN(input_dim, hidden_dim, embed_dim, trans_num=trans_num, diffusion_num=diffusion_num, bias=bias, rnn_type=rnn_type, model_type=model_type,
                         trans_activate_type=trans_activate_type)
         else:
-            return CTGCN(input_dim, hidden_dim, embed_dim, trans_num=trans_num, diffusion_num=diffusion_num, duration=duration, bias=bias, rnn_type=rnn_type,
+            return CTGCN(input_dim, hidden_dim, embed_dim, trans_num=trans_num, diffusion_num=diffusion_num, duration=time_length, bias=bias, rnn_type=rnn_type,
                          model_type=model_type, trans_activate_type=trans_activate_type)
 
 
-def get_loss(method, idx, data_loader, args):
+def get_loss(method, idx, time_length, data_loader, args):
     learning_type = args['learning_type']
     assert learning_type in ['U-neg', 'U-own', 'S-node', 'S-edge', 'S-link-st', 'S-link-dy']
     base_path = args['base_path']
     file_sep = args['file_sep']
-    duration = args['duration']
 
     if learning_type == 'U-neg':
         walk_pair_folder = args['walk_pair_folder']
@@ -178,8 +176,8 @@ def get_loss(method, idx, data_loader, args):
         Q = args['Q']
         walk_pair_base_path = os.path.abspath(os.path.join(base_path, walk_pair_folder))
         node_freq_base_path = os.path.abspath(os.path.join(base_path, node_freq_folder))
-        node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=duration)
-        neg_freq_list = data_loader.get_node_freq_list(node_freq_base_path, start_idx=idx, duration=duration)
+        node_pair_list = data_loader.get_node_pair_list(walk_pair_base_path, start_idx=idx, duration=time_length)
+        neg_freq_list = data_loader.get_node_freq_list(node_freq_base_path, start_idx=idx, duration=time_length)
         loss = NegativeSamplingLoss(node_pair_list, neg_freq_list, neg_num=neg_num, Q=Q)
         return loss
     elif learning_type == 'U-own':
@@ -202,13 +200,13 @@ def get_loss(method, idx, data_loader, args):
         if learning_type == 'S-node':
             nlabel_folder = args['nlabel_folder']
             nlabel_base_path = os.path.abspath(os.path.join(base_path, nlabel_folder))
-            node_label_list, output_dim = data_loader.get_node_label_list(nlabel_base_path, start_idx=idx, duration=duration, sep=file_sep)
-            classifier = MLPClassifier(embed_dim, cls_hidden_dim, output_dim, layer_num=cls_layer_num, duration=duration, bias=cls_bias, activate_type=cls_activate_type)
+            node_label_list, output_dim = data_loader.get_node_label_list(nlabel_base_path, start_idx=idx, duration=time_length, sep=file_sep)
+            classifier = MLPClassifier(embed_dim, cls_hidden_dim, output_dim, layer_num=cls_layer_num, duration=time_length, bias=cls_bias, activate_type=cls_activate_type)
         elif learning_type == 'S-edge':
             elabel_folder = args['elabel_folder']
             elabel_base_path = os.path.abspath(os.path.join(base_path, elabel_folder))
-            edge_label_list, output_dim = data_loader.get_edge_label_list(elabel_base_path, start_idx=idx, duration=duration, sep=file_sep)
-            classifier = EdgeClassifier(embed_dim, cls_hidden_dim, output_dim, layer_num=cls_layer_num, duration=duration, bias=cls_bias, activate_type=cls_activate_type)
+            edge_label_list, output_dim = data_loader.get_edge_label_list(elabel_base_path, start_idx=idx, duration=time_length, sep=file_sep)
+            classifier = EdgeClassifier(embed_dim, cls_hidden_dim, output_dim, layer_num=cls_layer_num, duration=time_length, bias=cls_bias, activate_type=cls_activate_type)
         else:  # S-link-st, S-link-dy
             classifier = InnerProduct()
             output_dim = 2  # postive link & negative link
@@ -256,6 +254,8 @@ def gnn_embedding(method, args):
         start_idx = max_time_num + start_idx
     if end_idx < 0:  # original time range is [start_idx, end_idx] containing start_idx and end_idx
         end_idx = max_time_num + end_idx + 1
+    else:
+        end_idx = end_idx + 1
     step = duration
     if learning_type == 'S-link-dy':
         assert duration >= 2 and end_idx - start_idx >= 1
@@ -268,12 +268,13 @@ def gnn_embedding(method, args):
     print('start ' + method + ' embedding!')
     for idx in range(start_idx, end_idx, step):
         print('idx = ', idx, ', duration = ', duration)
-        input_dim, adj_list, x_list, edge_list, node_dist_list = get_input_data(method, idx, data_loader, args)
+        time_length = min(idx + duration, end_idx) - idx
+        input_dim, adj_list, x_list, edge_list, node_dist_list = get_input_data(method, idx, time_length, data_loader, args)
         args['input_dim'] = input_dim
-        model = get_gnn_model(method, args)
+        model = get_gnn_model(method, time_length, args)
 
         if learning_type in ['U-neg', 'U-own']:
-            loss = get_loss(method, idx, data_loader, args)
+            loss = get_loss(method, idx, time_length, data_loader, args)
             trainer = UnsupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, node_list=node_list,
                                             model=model, loss=loss, model_folder=model_folder, has_cuda=has_cuda)
             cost_time = trainer.learn_embedding(adj_list, x_list, edge_list, node_dist_list, epoch=epoch, batch_size=batch_size, lr=lr, start_idx=idx, weight_decay=weight_decay,
@@ -285,7 +286,7 @@ def gnn_embedding(method, args):
             train_ratio = args['train_ratio']
             val_ratio = args['val_ratio']
             test_ratio = args['test_ratio']
-            loss, classifier, node_labels, edge_labels = get_loss(method, idx, data_loader, args)
+            loss, classifier, node_labels, edge_labels = get_loss(method, idx, time_length, data_loader, args)
             trainer = SupervisedEmbedding(base_path=base_path, origin_folder=origin_folder, embedding_folder=embedding_folder, node_list=node_list, model=model,
                                           loss=loss, classifier=classifier, model_folder=model_folder, has_cuda=has_cuda)
             cost_time = trainer.learn_embedding(adj_list, x_list, node_labels, edge_labels, edge_list, node_dist_list, learning_type=learning_type, epoch=epoch, batch_size=batch_size,
