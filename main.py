@@ -77,10 +77,16 @@ def edge_classification_task(args):
     edge_classification(args)
 
 
-# Regular equivalence prediction task
-def equivalence_prediction_task(args):
-    from evaluation.equivalence_prediction import equivalence_prediction
-    equivalence_prediction(args)
+# Graph centrality prediction task
+def centrality_prediction_task(args):
+    from evaluation.centrality_prediction import centrality_prediction
+    centrality_prediction(args)
+
+
+# Structural node similarity prediction task
+def similarity_prediction_task(args):
+    from evaluation.similarity_prediction import similarity_prediction
+    similarity_prediction(args)
 
 
 # The main function of the CTGCN project
@@ -109,9 +115,12 @@ def main(argv):
     elif args.task == 'edge_cls':
         args_dict = config_dict[args.task]
         edge_classification_task(args_dict)
-    elif args.task == 'equ_pred':
+    elif args.task == 'cent_pred':
         args_dict = config_dict[args.task]
-        equivalence_prediction_task(args_dict)
+        centrality_prediction_task(args_dict)
+    elif args.task == 'sim_pred':
+        args_dict = config_dict[args.task]
+        similarity_prediction_task(args_dict)
     else:
         raise AttributeError('Unsupported task!')
 
