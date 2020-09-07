@@ -101,9 +101,11 @@ class GIN(nn.Module):
         # List of batchnorms applied to the output of MLP (input of the final prediction linear layer)
         self.batch_norms = torch.nn.ModuleList()
 
-        for layer in range(self.layer_num):
+        for layer in range(self.layer_num - 1):
             self.mlps.append(MLP(hidden_dim, hidden_dim, hidden_dim, mlp_layer_num, bias=bias))
             self.batch_norms.append(nn.BatchNorm1d(hidden_dim))
+        self.mlps.append(MLP(hidden_dim, hidden_dim, output_dim, mlp_layer_num, bias=bias))
+        self.batch_norms.append(nn.BatchNorm1d(output_dim))
 
     def __preprocess_neighbors_maxpool(self, adj):
         # create padded_neighbor_list in a graph

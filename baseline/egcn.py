@@ -18,16 +18,14 @@ class EvolveGCN(torch.nn.Module):
     input_dim: int
     hidden_dim: int
     output_dim: int
-    duration: int
     method_name: str
     egcn_type: str
 
-    def __init__(self, input_dim, hidden_dim, output_dim, duration, egcn_type='EGCNH'):
+    def __init__(self, input_dim, hidden_dim, output_dim, egcn_type='EGCNH'):
         super().__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.output_dim = output_dim
-        self.duration = duration
         self.method_name = 'EvolveGCN'
         self.egcn_type = egcn_type
 
@@ -43,8 +41,6 @@ class EvolveGCN(torch.nn.Module):
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
             else:  # 'EGCNH'
                 Nodes_list = unit(A_list, Nodes_list, nodes_mask_list)
-        # output = Nodes_list[-1]
-        # output = self.norm(output)
         return Nodes_list
 
 
@@ -55,7 +51,6 @@ class GRCU(torch.nn.Module):
         self.egcn_type = egcn_type
         self.GCN_init_weights = Parameter(torch.FloatTensor(input_dim, output_dim))
         self.reset_param(self.GCN_init_weights)
-        self.norm = nn.LayerNorm(output_dim)
         assert self.egcn_type in ['EGCNO', 'EGCNH']
 
     def reset_param(self, t):
@@ -77,8 +72,6 @@ class GRCU(torch.nn.Module):
                 else:
                     GCN_weights = self.evolve_weights(GCN_weights, node_embs)
             node_embs = F.rrelu(Ahat.matmul(node_embs.matmul(GCN_weights)))
-            node_embs = self.norm(node_embs)
-            # node_embs = F.normalize(node_embs, p=2, dim=1)
             # node_embs = torch.sigmoid(Ahat.matmul(node_embs.matmul(GCN_weights)))
             out_seq.append(node_embs)
         return out_seq
