@@ -75,7 +75,7 @@ The above docker commands are only examples. If you want to run CTGCN source cod
 
 ## Functions
 
-This project has several functions, including: **preprocessing**, **graph embedding**, **link prediction**, **node classification**, **edge classification** and **regular equivalence prediction**. Thus, the corresponding Python commands are:
+This project has several functions, including: **preprocessing**, **graph embedding**, **link prediction**, **node classification**, **edge classification** and **graph centrality prediction**. Thus, the corresponding Python commands are:
 
 1. **Preprocessing**: generate k-core subgraphs and perform random walk.
 
@@ -99,9 +99,9 @@ This project has several functions, including: **preprocessing**, **graph embedd
 
     Note that we don't have edge classification data sets, so this function is only left for your future usage. Please pay attention that the code of this function is not fully tested.
 
-6. **Regular Equivalence Prediction**: perform regular equivalence prediction on several dynamic graph data sets to test the performance of graph embedding approaches. 
+6. **Graph Centrality Prediction**: perform graph centrality prediction on several dynamic graph data sets to test the performance of graph embedding approaches. 
 
-       python3 main.py --config=config/uci.json --task=equ_pred
+       python3 main.py --config=config/uci.json --task=cent_pred
 
 # Parameter Configurations
 
@@ -151,7 +151,7 @@ Note that we provide both original version and pytorch-geometric version of GCN,
 
 # Supported Data Sets
 
-This project use several data sets in link prediction, node classification and regular equivalence prediction tasks. The supported data sets are shown as follows:
+This project use several data sets in link prediction, node classification and graph centrality prediction tasks. The supported data sets are shown as follows:
 
 | **Data Set** | **Nodes** | **Edges** | **Max Degree** | **Max Core** | **Snapshots** |
 |:----:|:----:| :----: | :----: |:----: |:----: |
@@ -170,6 +170,7 @@ In above data sets, America-Air and Europe-Air are synthetic dynamic graphs, whi
 2. Weighted random walk are set as default in the `get_walk_info` function of 'preprocessing/walk_generation.py' file.
 3. The original graph edge data doesn't need to have a reverse edge for each edge, because the graph read functions (`get_sp_adj_mat` and `get_nx_graph` functions in 'utils.py') will add reverse edges automatically. All graph data sets are read by `get_sp_adj_mat` and `get_nx_graph` functions.
 4. The original graph file header must be 'from_id, to_id, weight', or you will modify the 'get_nx_graph' function of 'utils.py' file. `get_sp_adj_mat` don't care the concrete header name, as long as the first 2 columns are node indices. If the original graph file has only 2 columns,  `get_sp_adj_mat` function will set edge weights as 1 in the 3rd column. If the original graph file has 3 columns, `get_sp_adj_mat` function will set edge weights as values the 3rd column.
+5. CGCN-S and CTGCN-S can also use $N \times N$ one-hot sparse matrices as node features, but the performance will drop a little compared with degree-based node features. If you still want to use one-hot node features, one possible way to improve the performance of CGCN-S and CTCGN-S is to combine the negative sampling loss and their reconstruction loss. As the negative sampling loss can preserve local proximity, and their reconstruction loss can preserve global regular equivalence. In our paper, we just use degree-based node features and reconstruction loss for CGCN-S and CTGCN-S. But there still exists ways to continue to improve their performance.
 
 For typos, technical errors, or clarifications you would like to see added, please let me know and you are encouraged to make a pull request on this project.
 
