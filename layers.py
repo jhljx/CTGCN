@@ -46,6 +46,15 @@ class CoreDiffusion(nn.Module):
             # hx = self.linear(res)
             hx_list.append(res)
         hx_list = [F.relu(res) for res in hx_list]
+
+        #################################
+        # Simple Core Diffusion, no RNN
+        # out = hx_list[0]
+        # for i, res in enumerate(hx_list[1:]):
+        #     out = out + res
+        # output = self.linear(out)
+        ##################################
+        # Add RNN to improve performance, but this will reduce the computation efficiency a little.
         hx = torch.stack(hx_list, dim=0).transpose(0, 1)  # [batch_size, core_num, input_dim]
         output, _ = self.rnn(hx)
         output = output.sum(dim=1)
