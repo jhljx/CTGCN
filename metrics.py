@@ -193,12 +193,13 @@ class ClassificationLoss(nn.Module):
                 loss_val = bce_loss(preds, labels)
                 preds = preds.unsqueeze(1)
                 preds = torch.cat((1 - torch.sigmoid(preds), torch.sigmoid(preds)), dim=1)
-                auc_val = roc_auc_score(labels.cpu().detach().numpy(), torch.sigmoid(preds[:,1]).cpu().detach().numpy())
+                auc_val = roc_auc_score(labels.cpu().detach().numpy(), torch.sigmoid(preds[:, 1]).cpu().detach().numpy())
             else:
                 assert preds.shape[1] == self.n_class
                 loss_val = ce_loss(preds, labels)
-                auc_val = roc_auc_score(label_binarize(labels.cpu().detach().numpy(), np.arange(self.n_class)), torch.softmax(preds, dim=1).cpu().detach().numpy())
-
+                import warnings
+                warnings.filterwarnings("ignore", category=FutureWarning, module="sklearn", lineno=71)
+                auc_val = roc_auc_score(label_binarize(labels.cpu().detach().numpy(), np.arange(self.n_class)), torch.softmax(preds, dim=1).cpu().detach().numpy(), multi_class="ovr", average='micro')
             acc_val = accuracy(preds, labels)
             total_loss = total_loss + loss_val
             total_acc = total_acc + acc_val
@@ -224,6 +225,7 @@ class StructureClassificationLoss(nn.Module):
         structure_loss = self.reconstruction_loss(structure_input_list)
         cls_loss, total_acc, total_auc = self.classification_loss(cls_res, batch_labels)
         total_loss = structure_loss + cls_loss
+        # print('structure loss: ', structure_loss.item(), 'cls loss: ', cls_loss.item())
         return total_loss, total_acc, total_auc
 
 
