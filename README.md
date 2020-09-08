@@ -1,5 +1,5 @@
 # CTGCN
-This repository include the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902).
+This repository include the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902v2).
 
 # CTGCN Requirements
 - [Python](https://www.python.org/downloads/) >= 3.6
@@ -175,4 +175,4 @@ In above data sets, America-Air and Europe-Air are synthetic dynamic graphs, whi
 For typos, technical errors, or clarifications you would like to see added, please let me know and you are encouraged to make a pull request on this project.
 
 # Reference
-- [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902)
+- [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902v2)
