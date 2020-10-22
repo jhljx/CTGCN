@@ -1,5 +1,5 @@
 # CTGCN
-This repository include the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902).
+This repository includes the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://arxiv.org/abs/2003.09902).
 
 # CTGCN Requirements
 - [Python](https://www.python.org/downloads/) >= 3.6
