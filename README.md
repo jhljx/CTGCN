@@ -1,5 +1,5 @@
 # CTGCN
-This repository includes the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://ieeexplore.ieee.org/document/9240056). The paper is now accepted by IEEE Transaction on Knowledge and Data Engineering. You can also found the preprint paper on [arXiv](https://arxiv.org/abs/2003.09902).
+This repository includes the source code and data sets used in our paper: [K-Core based Temporal Graph Convolutional Network for Dynamic Graphs](https://ieeexplore.ieee.org/document/9240056). The paper is now accepted by IEEE Transaction on Knowledge and Data Engineering. You can also found the preprint paper on [arXiv](https://arxiv.org/abs/2003.09902) website.
 
 If you make use of this code or the CTGCN algorithm in your work, please cite our papers:
 
