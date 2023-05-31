@@ -480,11 +480,11 @@ class VGRNN(nn.Module):
         self.dec = InnerProductDecoder(act=lambda x: x)
 
     def forward(self, x_list, edge_idx_list, hx=None):
-        assert len(x_list) == len(edge_idx_list)
+        assert len(x_list) == len(edge_idx_list) and len(x_list) > 0
         timestamp_num = len(x_list)
 
         if hx is None:
-            h = Variable(torch.zeros(self.rnn_layer_num, self.input_dim, self.hidden_dim, device=x_list[0].device))
+            h = Variable(torch.zeros(self.rnn_layer_num, x_list[0].size(1), self.hidden_dim, device=x_list[0].device))
         else:
             h = Variable(hx)
         loss_data_list = [[], [], [], [], []]
