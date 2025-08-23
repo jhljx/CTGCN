@@ -133,3 +133,79 @@ dmypy.json
 *.pyd
 */build/*
 *.DS_Store
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+pytest_cache/
+test-results/
+.tox/
+.nox/
+
+# Claude settings
+.claude/*
+
+# Poetry
+# Note: Do not ignore poetry.lock - it should be committed
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build artifacts
+build/
+_build/
+*.so
+*.dylib
+*.dll
+*.pyd
+*.pyo
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+tmp/
+temp/
+
+# Logs
+*.log
+logs/
+
+# Documentation build
+docs/_build/
+docs/build/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data files (optional - uncomment if needed)
+# data/raw/
+# data/processed/
